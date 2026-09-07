@@ -11,6 +11,7 @@ Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 - **Flight log analysis** (v0.3): Parse CSV logs, compute stats, compare plan vs actual
 - **MAVLink connection** (v0.4): Upload missions to autopilot, download from autopilot
 - **KML import + templates** (v0.5): Import KML files as missions, use built-in templates
+- **Mission simulation** (v0.6): Battery estimation, wind effects, geofence check, safety validation
 - **Export**: MAVLink waypoint file, KML (Google Earth), CSV
 
 ## Install
@@ -43,6 +44,12 @@ mavplan analyze compare flight_log.csv mission.json -o comparison.kml
 mavplan link status udp:127.0.0.1:14550
 mavplan link upload udp:127.0.0.1:14550 mission.json
 mavplan link download udp:127.0.0.1:14550 downloaded.json
+
+# --- Mission simulation (v0.6) ---
+mavplan simulate run mission.json --capacity 8000 --wind 5 --wind-dir headwind
+mavplan simulate battery mission.json --capacity 8000
+mavplan simulate geofence mission.json --max-range 1000
+mavplan simulate with-tol mission.json -o mission_with_tol.json
 
 # --- KML import + templates (v0.5) ---
 mavplan template list
@@ -104,6 +111,11 @@ conn.close()
 - Added built-in mission template library (5 templates: survey, inspection, emergency, patrol, mapping)
 - `parse_kml()`, `KmlDocument`, `MissionTemplate`, `get_templates()`
 - New CLI: `mavplan template` subcommand (list/load/import-kml/export)
+
+### v0.6.0 (2026-09-07)
+- Added mission simulation: battery estimation, wind effects, geofence check
+- `BatteryModel`, `WindModel`, `SimulationParams`, `estimate_energy()`, `insert_takeoff_landing()`, `check_geofence()`, `generate_report()`
+- New CLI: `mavplan simulate` subcommand (run/battery/geofence/with-tol)
 
 ### v0.4.0 (2026-09-07)
 - Added MAVLink connection: upload/download missions to real autopilot

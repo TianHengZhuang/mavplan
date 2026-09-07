@@ -571,3 +571,114 @@ class TestMavlinkLink:
         assert info.target_system == 1
 
 
+class TestSimulate:
+    def test_battery_model_capacity_wh(self):
+        from mavplan.simulate import BatteryModel
+        b = BatteryModel(capacity_mah=5000, voltage=22.2)
+        assert b.capacity_wh == pytest.approx(111.0, abs=0.1)
+
+    def test_wind_speed_factor_headwind(self):
+        from mavplan.simulate import WindModel, WindDirection
+        w = WindModel(speed_ms=5.0, direction=WindDirection.HEADWIND)
+        f = w.speed_factor()
+        assert f < 1.0
+
+    def test_wind_speed_factor_tailwind(self):
+        from mavplan.simulate import WindModel, WindDirection
+        w = WindModel(speed_ms=5.0, direction=WindDirection.TAILWIND)
+        f = w.speed_factor()
+        assert f > 1.0
+
+    def test_estimate_energy_simple(self, tmp_path):
+        from mavplan.simulate import BatteryModel, SimulationParams, estimate_energy
+        mission_file = tmp_path / "m.json"
+        mission_file.write_text(json.dumps({
+            "name": "Test", "waypoints": [
+                {"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0},
+                {"lat": 31.235, "lon": 121.475, "alt": 50.0, "speed": 10.0, "delay": 5, "yaw": -9999, "seq": 1},
+            ]
+        }), encoding="utf-8")
+        mission = Mission.load(mission_file)
+        params = SimulationParams(battery=BatteryModel(capacity_mah=5000, voltage=22.2))
+        result = estimate_energy(mission, params)
+        assert result.total_distance_m > 0
+        assert result.total_time_s > 0
+        assert result.energy_consumed_wh > 0
+        assert 0 <= result.battery_used_percent <= 100
+
+    def test_estimate_energy_insufficient_battery(self, tmp_path):
+        from mavplan.simulate import BatteryModel, SimulationParams, estimate_energy
+        mission_file = tmp_path / "m.json"
+        # Large mission that exceeds battery
+        wps = [{"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0}]
+        lat, lon = 31.230, 121.470
+        for i in range(50):
+            lat += 0.01
+            wps.append({"lat": lat, "lon": lon, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": i+1})
+        mission_file.write_text(json.dumps({"name": "Long", "waypoints": wps}), encoding="utf-8")
+        mission = Mission.load(mission_file)
+        params = SimulationParams(battery=BatteryModel(capacity_mah=500, voltage=22.2))
+        result = estimate_energy(mission, params)
+        assert not result.feasible
+        assert result.battery_used_percent > 100
+
+    def test_insert_takeoff_landing(self, tmp_path):
+        from mavplan.simulate import SimulationParams, insert_takeoff_landing
+        mission_file = tmp_path / "m.json"
+        mission_file.write_text(json.dumps({
+            "name": "Test", "waypoints": [
+                {"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0},
+                {"lat": 31.235, "lon": 121.475, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 1},
+            ]
+        }), encoding="utf-8")
+        mission = Mission.load(mission_file)
+        params = SimulationParams()
+        new_mission = insert_takeoff_landing(mission, params)
+        # Original 2 + takeoff + landing = 4
+        assert len(new_mission) == 4
+        assert new_mission[0].alt == params.takeoff_altitude
+        assert new_mission[-1].alt == 0.0
+
+    def test_check_geofence_pass(self, tmp_path):
+        from mavplan.simulate import check_geofence
+        mission_file = tmp_path / "m.json"
+        mission_file.write_text(json.dumps({
+            "name": "Test", "waypoints": [
+                {"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0},
+                {"lat": 31.231, "lon": 121.471, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 1},
+            ]
+        }), encoding="utf-8")
+        mission = Mission.load(mission_file)
+        warnings = check_geofence(mission, max_range_m=5000.0)
+        assert len(warnings) == 0
+
+    def test_check_geofence_violation(self, tmp_path):
+        from mavplan.simulate import check_geofence
+        mission_file = tmp_path / "m.json"
+        mission_file.write_text(json.dumps({
+            "name": "Test", "waypoints": [
+                {"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0},
+                {"lat": 31.280, "lon": 121.520, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 1},
+            ]
+        }), encoding="utf-8")
+        mission = Mission.load(mission_file)
+        warnings = check_geofence(mission, max_range_m=500.0)
+        assert len(warnings) >= 1
+
+    def test_generate_report(self, tmp_path):
+        from mavplan.simulate import BatteryModel, SimulationParams, generate_report
+        mission_file = tmp_path / "m.json"
+        mission_file.write_text(json.dumps({
+            "name": "Test", "waypoints": [
+                {"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0},
+                {"lat": 31.235, "lon": 121.475, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 1},
+            ]
+        }), encoding="utf-8")
+        mission = Mission.load(mission_file)
+        params = SimulationParams(battery=BatteryModel(capacity_mah=5000, voltage=22.2))
+        report = generate_report(mission, params)
+        assert "Mission Simulation Report" in report
+        assert "Total distance" in report
+        assert "Battery" in report
+
+

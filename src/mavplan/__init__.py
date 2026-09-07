@@ -33,6 +33,17 @@ from .mavlink_link import (
     HeartbeatInfo,
     ConnectionState,
 )
+from .simulate import (
+    BatteryModel,
+    WindModel,
+    WindDirection,
+    SimulationParams,
+    SimulationResult,
+    estimate_energy,
+    insert_takeoff_landing,
+    check_geofence,
+    generate_report,
+)
 
 __all__ = [
     "Mission",
@@ -61,5 +72,14 @@ __all__ = [
     "ConnectionInfo",
     "HeartbeatInfo",
     "ConnectionState",
+    "BatteryModel",
+    "WindModel",
+    "WindDirection",
+    "SimulationParams",
+    "SimulationResult",
+    "estimate_energy",
+    "insert_takeoff_landing",
+    "check_geofence",
+    "generate_report",
 ]
-__version__ = "0.5.0"
+__version__ = "0.6.0"

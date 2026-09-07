@@ -1,7 +1,10 @@
 """Tests for mavplan."""
 from __future__ import annotations
 
+import json
 import math
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -14,6 +17,13 @@ from mavplan.pattern import (
     generate_lawnmower,
     generate_polygon_scan,
     generate_orbit,
+)
+from mavplan.flightlog import (
+    FlightLog,
+    FlightPoint,
+    FlightStats,
+    parse_csv,
+    compare_to_plan,
 )
 
 
@@ -280,4 +290,167 @@ class TestPolygonScan:
         )
         errors = params.validate()
         assert any("at least 3" in e for e in errors)
+
+
+class TestFlightLog:
+    def test_flight_point_distance(self):
+        # Two points ~111m apart in latitude
+        p1 = FlightPoint(lat=31.0, lon=121.0, alt=50.0)
+        p2 = FlightPoint(lat=31.001, lon=121.0, alt=50.0)
+        dist = p1.distance_to(p2)
+        assert 100 < dist < 120  # ~111m at this latitude
+
+    def test_flight_stats_empty(self):
+        log = FlightLog(points=[], source_file="test.csv")
+        s = log.stats()
+        assert s.total_distance_m == 0
+        assert s.num_points == 0
+        assert s.flight_duration_s == 0
+
+    def test_flight_stats_basic(self):
+        points = [
+            FlightPoint(lat=31.230, lon=121.470, alt=50.0, speed=10.0, time_s=0.0),
+            FlightPoint(lat=31.231, lon=121.471, alt=55.0, speed=10.0, time_s=10.0),
+            FlightPoint(lat=31.232, lon=121.472, alt=60.0, speed=10.0, time_s=20.0),
+        ]
+        log = FlightLog(points=points, source_file="test.csv")
+        s = log.stats()
+        assert s.num_points == 3
+        assert s.total_distance_m > 0
+        assert s.max_altitude_m == 60.0
+        assert s.min_altitude_m == 50.0
+        assert s.max_altitude_change_m == 10.0
+        assert s.avg_speed_mps == 10.0
+        assert s.flight_duration_s == 20.0
+
+    def test_flight_log_to_kml(self):
+        points = [
+            FlightPoint(lat=31.23, lon=121.47, alt=50.0, time_s=0.0),
+            FlightPoint(lat=31.24, lon=121.48, alt=50.0, time_s=10.0),
+        ]
+        log = FlightLog(points=points)
+        kml = log.to_kml(name="Test Flight")
+        assert "<kml" in kml
+        assert "Flight Path" in kml
+        assert "31.23" in kml or "31.2" in kml  # coordinates present
+
+    def test_flight_log_to_csv(self):
+        points = [
+            FlightPoint(lat=31.23, lon=121.47, alt=50.0, speed=10.0, time_s=0.0, heading=90.0),
+        ]
+        log = FlightLog(points=points)
+        csv_out = log.to_csv()
+        assert "time_s" in csv_out
+        assert "31.2300" in csv_out or "31.2" in csv_out
+
+    def test_parse_csv_basic(self, tmp_path):
+        csv_file = tmp_path / "flight.csv"
+        csv_file.write_text(
+            "lat,lon,alt,speed,time_s\n"
+            "31.230,121.470,50.0,10.0,0.0\n"
+            "31.231,121.471,55.0,10.0,10.0\n"
+            "31.232,121.472,60.0,10.0,20.0\n",
+            encoding="utf-8",
+        )
+        log = parse_csv(csv_file)
+        assert len(log) == 3
+        assert log.points[0].lat == pytest.approx(31.230)
+        assert log.stats().max_altitude_m == 60.0
+
+    def test_parse_csv_tab_delimited(self, tmp_path):
+        csv_file = tmp_path / "flight.tsv"
+        csv_file.write_text(
+            "lat\tlon\talt\n"
+            "31.230\t121.470\t50.0\n"
+            "31.231\t121.471\t55.0\n",
+            encoding="utf-8",
+        )
+        log = parse_csv(csv_file)
+        assert len(log) == 2
+
+    def test_parse_csv_skips_bad_rows(self, tmp_path):
+        csv_file = tmp_path / "flight.csv"
+        csv_file.write_text(
+            "lat,lon,alt\n"
+            "31.230,121.470,50.0\n"
+            "INVALID,INVALID,INVALID\n"  # bad row
+            "91.0,181.0,50.0\n"        # out of range
+            "31.231,121.471,55.0\n",
+            encoding="utf-8",
+        )
+        log = parse_csv(csv_file)
+        # Only valid rows kept (2 valid, 2 invalid)
+        assert len(log) == 2
+
+    def test_parse_csv_missing_columns(self, tmp_path):
+        csv_file = tmp_path / "flight.csv"
+        csv_file.write_text(
+            "lat,lon,alt,speed,heading\n"
+            "31.230,121.470,50.0,10.0,90.0\n"
+            "31.231,121.471,55.0,12.0,95.0\n",
+            encoding="utf-8",
+        )
+        log = parse_csv(csv_file)
+        assert len(log) == 2
+        assert log.points[0].speed == pytest.approx(10.0)
+        assert log.points[0].heading == pytest.approx(90.0)
+
+    def test_parse_csv_not_found_raises(self):
+        with pytest.raises(ValueError, match="not found"):
+            parse_csv("/nonexistent/path/flight.csv")
+
+    def test_parse_csv_no_coords_raises(self, tmp_path):
+        csv_file = tmp_path / "flight.csv"
+        csv_file.write_text("col1,col2\nval1,val2\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="latitude and longitude"):
+            parse_csv(csv_file)
+
+
+class TestCompareToPlan:
+    def test_compare_to_plan_full_coverage(self, tmp_path):
+        # Create a flight log that exactly follows the plan
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(json.dumps({
+            "name": "Test", "waypoints": [
+                {"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0},
+                {"lat": 31.231, "lon": 121.471, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 1},
+            ]
+        }), encoding="utf-8")
+
+        flight_points = [
+            FlightPoint(lat=31.230, lon=121.470, alt=50.0, time_s=0.0),
+            FlightPoint(lat=31.231, lon=121.471, alt=50.0, time_s=10.0),
+        ]
+        log = FlightLog(points=flight_points)
+        mission = Mission.load(plan_file)
+
+        result = compare_to_plan(log, mission)
+        assert result["total_plan_waypoints"] == 2
+        assert result["waypoint_hits_10m"] == 2  # both waypoints hit within 10m
+        assert result["waypoint_hits_20m"] == 2
+        assert result["waypoint_hits_50m"] == 2
+
+    def test_compare_to_plan_partial_coverage(self, tmp_path):
+        plan_file = tmp_path / "plan.json"
+        plan_file.write_text(json.dumps({
+            "name": "Test", "waypoints": [
+                {"lat": 31.230, "lon": 121.470, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 0},
+                {"lat": 31.231, "lon": 121.471, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 1},
+                {"lat": 31.232, "lon": 121.472, "alt": 50.0, "speed": 10.0, "delay": 0, "yaw": -9999, "seq": 2},
+            ]
+        }), encoding="utf-8")
+
+        # Flight only covers the first waypoint
+        flight_points = [
+            FlightPoint(lat=31.230, lon=121.470, alt=50.0, time_s=0.0),
+            FlightPoint(lat=31.2305, lon=121.471, alt=50.0, time_s=5.0),
+        ]
+        log = FlightLog(points=flight_points)
+        mission = Mission.load(plan_file)
+
+        result = compare_to_plan(log, mission)
+        assert result["waypoint_hits_10m"] == 1
+        assert result["waypoint_hits_20m"] == 1
+        assert result["waypoint_hits_50m"] == 1  # third waypoint far away
+        assert result["total_plan_waypoints"] == 3
 

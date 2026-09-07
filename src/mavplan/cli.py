@@ -9,6 +9,15 @@ import click
 
 from .mission import Mission
 from .waypoint import Waypoint
+from .pattern import (
+    LawnMowerParams,
+    PolygonScanParams,
+    OrbitParams,
+    StartCorner,
+    generate_lawnmower,
+    generate_polygon_scan,
+    generate_orbit,
+)
 
 MISSION_FILE = Path.home() / ".mavplan" / "mission.json"
 
@@ -232,6 +241,173 @@ def _write_output(path: str, content: str) -> None:
 
 
 # ------------------------------------------------------------------
+# generate group
+# ------------------------------------------------------------------
+@click.group()
+def generate() -> None:
+    """Generate automated mission patterns."""
+    pass
+
+
+@generate.command()
+@click.option("--corner1", required=True, help="First corner: lat,lon  (e.g. 31.23,121.47)")
+@click.option("--corner2", required=True, help="Opposite corner: lat,lon")
+@click.option("--alt", "altitude", type=float, required=True, help="Survey altitude in metres")
+@click.option("--speed", type=float, default=10.0, help="Speed in m/s")
+@click.option("--spacing", "lane_spacing", type=float, default=20.0, help="Lane spacing in metres")
+@click.option("--corner", "start_corner",
+              type=click.Choice(["nw", "ne", "sw", "se"], case_sensitive=False),
+              default="nw", help="Start corner (north-west by default)")
+@click.option("--from-outer/--from-inner", "start_from_outer", default=True,
+              help="Start from outer edge (default: outer)")
+@click.option("--save/--no-save", "auto_save", default=True)
+def lawnmower(corner1, corner2, altitude, speed, lane_spacing, start_corner, start_from_outer, auto_save) -> None:
+    """Generate a rectangular lawn-mower (survey) pattern.
+
+    Example: --corner1 31.230,121.470 --corner2 31.235,121.480 --alt 50
+    """
+    lat1, lon1 = _parse_latlon(corner1)
+    lat2, lon2 = _parse_latlon(corner2)
+    params = LawnMowerParams(
+        corner1=(lat1, lon1),
+        corner2=(lat2, lon2),
+        altitude=altitude,
+        speed=speed,
+        lane_spacing=lane_spacing,
+        start_corner=StartCorner.from_str(start_corner),
+        start_from_outer=start_from_outer,
+    )
+    errors = params.validate()
+    if errors:
+        click.echo("  Validation errors:", err=True)
+        for e in errors:
+            click.echo(f"    - {e}", err=True)
+        sys.exit(1)
+
+    mission = Mission(name="Lawn-Mower Survey")
+    for wp in generate_lawnmower(params):
+        mission.add_waypoint(**wp.to_dict())
+
+    if auto_save:
+        _save_mission(mission)
+
+    click.echo(f"  Generated {len(mission)} waypoints (lawn-mower pattern)")
+    click.echo(f"  Total distance: {mission.total_distance()/1000:.2f} km")
+    click.echo(f"  Est. duration: ~{int(mission.estimated_duration()/60)}m")
+    if auto_save:
+        click.echo(f"  Saved to default mission.")
+
+
+@generate.command()
+@click.option("--polygon", required=True, multiple=True,
+              help="Polygon vertex: lat,lon  (specify 3+ times)")
+@click.option("--alt", "altitude", type=float, required=True, help="Survey altitude in metres")
+@click.option("--speed", type=float, default=10.0, help="Speed in m/s")
+@click.option("--spacing", "lane_spacing", type=float, default=20.0, help="Lane spacing in metres")
+@click.option("--angle", "sweep_angle_deg", type=float, default=0.0,
+              help="Sweep angle in degrees (0=NS lanes)")
+@click.option("--from-outer/--from-inner", "start_from_outer", default=True)
+@click.option("--save/--no-save", "auto_save", default=True)
+def polygon(polygon, altitude, speed, lane_spacing, sweep_angle_deg, start_from_outer, auto_save) -> None:
+    """Generate a lawn-mower scan within a polygon area.
+
+    Provide at least 3 --polygon vertices. Example:
+      mavplan generate polygon --polygon 31.230,121.470 --polygon 31.240,121.470 \\
+             --polygon 31.240,121.480 --polygon 31.230,121.480 --alt 50
+    """
+    if len(polygon) < 3:
+        click.echo("  Error: polygon requires at least 3 vertices", err=True)
+        sys.exit(1)
+    verts = [_parse_latlon(p) for p in polygon]
+    params = PolygonScanParams(
+        polygon=[(lat, lon) for lat, lon in verts],
+        altitude=altitude,
+        speed=speed,
+        lane_spacing=lane_spacing,
+        sweep_angle_deg=sweep_angle_deg,
+        start_from_outer=start_from_outer,
+    )
+    errors = params.validate()
+    if errors:
+        click.echo("  Validation errors:", err=True)
+        for e in errors:
+            click.echo(f"    - {e}", err=True)
+        sys.exit(1)
+
+    mission = Mission(name="Polygon Survey")
+    for wp in generate_polygon_scan(params):
+        mission.add_waypoint(**wp.to_dict())
+
+    if not mission.waypoints():
+        click.echo("  Error: pattern produced no waypoints (polygon may be too small)", err=True)
+        sys.exit(1)
+
+    if auto_save:
+        _save_mission(mission)
+
+    click.echo(f"  Generated {len(mission)} waypoints (polygon scan)")
+    click.echo(f"  Total distance: {mission.total_distance()/1000:.2f} km")
+    if auto_save:
+        click.echo(f"  Saved to default mission.")
+
+
+@generate.command()
+@click.option("--center", required=True, help="Orbit center: lat,lon  (e.g. 31.23,121.47)")
+@click.option("--radius", type=float, required=True, help="Orbit radius in metres")
+@click.option("--alt", "altitude", type=float, required=True, help="Orbit altitude in metres")
+@click.option("--speed", type=float, default=10.0, help="Speed in m/s")
+@click.option("--points", "num_points", type=int, default=12, help="Number of waypoints")
+@click.option("--direction", type=click.Choice(["cw", "ccw"]), default="ccw", help="Orbit direction")
+@click.option("--save/--no-save", "auto_save", default=True)
+def orbit(center, radius, altitude, speed, num_points, direction, auto_save) -> None:
+    """Generate a circular orbit / loiter pattern.
+
+    Example: --center 31.23,121.47 --radius 50 --alt 50 --points 12
+    """
+    lat, lon = _parse_latlon(center)
+    params = OrbitParams(
+        center_lat=lat,
+        center_lon=lon,
+        radius=radius,
+        altitude=altitude,
+        speed=speed,
+        num_points=num_points,
+        direction=direction,
+    )
+    errors = params.validate()
+    if errors:
+        click.echo("  Validation errors:", err=True)
+        for e in errors:
+            click.echo(f"    - {e}", err=True)
+        sys.exit(1)
+
+    mission = Mission(name=f"Orbit r={radius}m")
+    for wp in generate_orbit(params):
+        mission.add_waypoint(**wp.to_dict())
+
+    if auto_save:
+        _save_mission(mission)
+
+    click.echo(f"  Generated {len(mission)} waypoints (orbit)")
+    click.echo(f"  Orbit circumference: {2*3.14159*radius:.0f}m")
+    if auto_save:
+        click.echo(f"  Saved to default mission.")
+
+
+def _parse_latlon(s: str) -> tuple[float, float]:
+    """Parse 'lat,lon' string into (lat, lon) tuple."""
+    parts = s.split(",")
+    if len(parts) != 2:
+        raise click.BadParameter(f"Expected 'lat,lon', got: {s}")
+    try:
+        lat = float(parts[0].strip())
+        lon = float(parts[1].strip())
+    except ValueError:
+        raise click.BadParameter(f"Invalid number in: {s}")
+    return lat, lon
+
+
+# ------------------------------------------------------------------
 # root
 # ------------------------------------------------------------------
 @click.group()
@@ -249,6 +425,7 @@ def main() -> None:
 main.add_command(waypoint)
 main.add_command(mission)
 main.add_command(export)
+main.add_command(generate)
 
 
 if __name__ == "__main__":

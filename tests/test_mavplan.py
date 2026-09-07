@@ -6,6 +6,15 @@ import math
 import pytest
 
 from mavplan import Mission, Waypoint
+from mavplan.pattern import (
+    LawnMowerParams,
+    PolygonScanParams,
+    OrbitParams,
+    StartCorner,
+    generate_lawnmower,
+    generate_polygon_scan,
+    generate_orbit,
+)
 
 
 class TestWaypoint:
@@ -137,3 +146,138 @@ class TestMission:
         assert restored.name == "Survey"
         assert len(restored) == 1
         assert restored[0].lat == 31.23
+
+
+class TestLawnMowerPattern:
+    def test_generates_even_number_of_waypoints(self):
+        params = LawnMowerParams(
+            corner1=(31.230, 121.470),
+            corner2=(31.240, 121.480),
+            altitude=50.0,
+            lane_spacing=20.0,
+        )
+        wps = list(generate_lawnmower(params))
+        # Should be multiple of 2 (each lane has 2 waypoints)
+        assert len(wps) % 2 == 0
+        assert len(wps) >= 2
+
+    def test_waypoints_alternate_lon_direction(self):
+        params = LawnMowerParams(
+            corner1=(31.230, 121.470),
+            corner2=(31.240, 121.480),
+            altitude=50.0,
+            lane_spacing=20.0,
+        )
+        wps = list(generate_lawnmower(params))
+        for i in range(0, len(wps) - 1, 2):
+            # Even indices: sweep start, odd: sweep end
+            assert wps[i].lon < wps[i + 1].lon
+
+    def test_all_waypoints_in_bbox(self):
+        params = LawnMowerParams(
+            corner1=(31.230, 121.470),
+            corner2=(31.240, 121.480),
+            altitude=50.0,
+            lane_spacing=20.0,
+        )
+        wps = list(generate_lawnmower(params))
+        min_lat = min(31.230, 31.240)
+        max_lat = max(31.230, 31.240)
+        min_lon = min(121.470, 121.480)
+        max_lon = max(121.470, 121.480)
+        for wp in wps:
+            assert min_lat <= wp.lat <= max_lat
+            assert min_lon <= wp.lon <= max_lon
+
+    def test_invalid_lane_spacing_raises(self):
+        params = LawnMowerParams(
+            corner1=(31.230, 121.470),
+            corner2=(31.240, 121.480),
+            altitude=50.0,
+            lane_spacing=-10.0,
+        )
+        with pytest.raises(ValueError, match="Invalid"):
+            list(generate_lawnmower(params))
+
+    def test_start_from_outer_vs_inner(self):
+        params_outer = LawnMowerParams(
+            corner1=(31.230, 121.470),
+            corner2=(31.240, 121.480),
+            altitude=50.0,
+            lane_spacing=20.0,
+            start_from_outer=True,
+        )
+        params_inner = LawnMowerParams(
+            corner1=(31.230, 121.470),
+            corner2=(31.240, 121.480),
+            altitude=50.0,
+            lane_spacing=20.0,
+            start_from_outer=False,
+        )
+        wps_outer = list(generate_lawnmower(params_outer))
+        wps_inner = list(generate_lawnmower(params_inner))
+        # Both produce same count, just different order
+        assert len(wps_outer) == len(wps_inner)
+
+
+class TestOrbitPattern:
+    def test_generates_requested_num_points(self):
+        params = OrbitParams(
+            center_lat=31.235, center_lon=121.475,
+            radius=50.0, altitude=50.0, num_points=8,
+        )
+        wps = list(generate_orbit(params))
+        assert len(wps) == 8
+
+    def test_all_waypoints_same_altitude(self):
+        params = OrbitParams(
+            center_lat=31.235, center_lon=121.475,
+            radius=50.0, altitude=50.0, num_points=12,
+        )
+        wps = list(generate_orbit(params))
+        for wp in wps:
+            assert wp.alt == 50.0
+
+    def test_waypoints_circular_distribution(self):
+        params = OrbitParams(
+            center_lat=31.235, center_lon=121.475,
+            radius=50.0, altitude=50.0, num_points=12,
+        )
+        wps = list(generate_orbit(params))
+        # All waypoints should be roughly equidistant from center
+        for wp in wps:
+            lat_diff = abs(wp.lat - params.center_lat)
+            lon_diff = abs(wp.lon - params.center_lon)
+            # Very rough check (within ~100m)
+            assert lat_diff < 0.001
+            assert lon_diff < 0.001
+
+    def test_invalid_num_points_raises(self):
+        params = OrbitParams(
+            center_lat=31.235, center_lon=121.475,
+            radius=50.0, altitude=50.0, num_points=2,
+        )
+        with pytest.raises(ValueError, match="Invalid"):
+            list(generate_orbit(params))
+
+
+class TestPolygonScan:
+    def test_rectangle_polygon_generates_waypoints(self):
+        rect = [(31.230, 121.470), (31.240, 121.470), (31.240, 121.480), (31.230, 121.480)]
+        params = PolygonScanParams(
+            polygon=rect, altitude=50.0, lane_spacing=20.0,
+        )
+        wps = list(generate_polygon_scan(params))
+        assert len(wps) >= 2
+        for wp in wps:
+            assert -90 <= wp.lat <= 90
+            assert -180 <= wp.lon <= 180
+
+    def test_polygon_validation_rejects_small(self):
+        params = PolygonScanParams(
+            polygon=[(31.23, 121.47), (31.24, 121.48)],
+            altitude=50.0, lane_spacing=20.0,
+        )
+        errors = params.validate()
+        assert any("at least 3" in e for e in errors)
+

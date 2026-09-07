@@ -36,6 +36,16 @@ from .mavlink_link import (
     MAVLinkConnection,
     ConnectionState,
 )
+from .simulate import (
+    BatteryModel,
+    WindModel,
+    WindDirection,
+    SimulationParams,
+    estimate_energy,
+    insert_takeoff_landing,
+    check_geofence,
+    generate_report,
+)
 
 MISSION_FILE = Path.home() / ".mavplan" / "mission.json"
 
@@ -795,6 +805,121 @@ def link_download(device: str, output_path: str) -> None:
 
 
 # ------------------------------------------------------------------
+# simulate group
+# ------------------------------------------------------------------
+@click.group()
+def simulate() -> None:
+    """Simulate mission: battery, time, wind, safety checks."""
+    pass
+
+
+@simulate.command(name="run")
+@click.argument("mission_path", type=click.Path(exists=True))
+@click.option("--capacity", "cap_mah", type=float, default=5000.0, help="Battery capacity in mAh")
+@click.option("--voltage", type=float, default=22.2, help="Battery nominal voltage (V)")
+@click.option("--wind", "wind_speed", type=float, default=0.0, help="Wind speed in m/s")
+@click.option("--wind-dir", "wind_dir", type=click.Choice(["none", "headwind", "tailwind", "crosswind"]),
+              default="none", help="Wind direction relative to travel")
+@click.option("--reserve", type=float, default=20.0, help="Battery reserve percent to keep")
+def sim_run(mission_path, cap_mah, voltage, wind_speed, wind_dir, reserve) -> None:
+    """Run a mission simulation.
+
+    Example: mavplan simulate run mission.json --capacity 8000 --wind 5 --wind-dir headwind
+    """
+    try:
+        mission = Mission.load(mission_path)
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        sys.exit(1)
+
+    battery = BatteryModel(capacity_mah=cap_mah, voltage=voltage)
+    wind_map = {
+        "none": WindDirection.NONE,
+        "headwind": WindDirection.HEADWIND,
+        "tailwind": WindDirection.TAILWIND,
+        "crosswind": WindDirection.CROSSWIND,
+    }
+    wind = WindModel(speed_ms=wind_speed, direction=wind_map[wind_dir])
+    params = SimulationParams(battery=battery, wind=wind, reserve_percent=reserve)
+
+    report = generate_report(mission, params)
+    click.echo(report)
+
+
+@simulate.command(name="battery")
+@click.argument("mission_path", type=click.Path(exists=True))
+@click.option("--capacity", "cap_mah", type=float, default=5000.0, help="Battery capacity in mAh")
+@click.option("--voltage", type=float, default=22.2, help="Battery nominal voltage (V)")
+def sim_battery(mission_path, cap_mah, voltage) -> None:
+    """Estimate battery consumption only.
+
+    Example: mavplan simulate battery mission.json --capacity 8000
+    """
+    try:
+        mission = Mission.load(mission_path)
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        sys.exit(1)
+
+    battery = BatteryModel(capacity_mah=cap_mah, voltage=voltage)
+    params = SimulationParams(battery=battery)
+    result = estimate_energy(mission, params)
+
+    click.echo(f"  Energy used: {result.energy_consumed_wh:.1f} Wh")
+    click.echo(f"  Battery capacity: {battery.capacity_wh:.1f} Wh")
+    click.echo(f"  Used: {result.battery_used_percent:.0f}%")
+    click.echo(f"  Remaining: {result.battery_remaining_percent:.0f}%")
+    click.echo(f"  Feasible: {result.feasible}")
+
+
+@simulate.command(name="geofence")
+@click.argument("mission_path", type=click.Path(exists=True))
+@click.option("--max-range", "max_range", type=float, default=500.0, help="Max range from home in metres")
+def sim_geofence(mission_path, max_range) -> None:
+    """Check geofence compliance.
+
+    Example: mavplan simulate geofence mission.json --max-range 1000
+    """
+    try:
+        mission = Mission.load(mission_path)
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        sys.exit(1)
+
+    warnings = check_geofence(mission, max_range)
+    if warnings:
+        click.echo(f"  Geofence violations ({max_range/1000:.1f}km limit):")
+        for w in warnings:
+            click.echo(f"    - {w}")
+        sys.exit(1)
+    else:
+        click.echo(f"  OK: all waypoints within {max_range/1000:.1f}km geofence")
+
+
+@simulate.command(name="with-tol")
+@click.argument("mission_path", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), default="", help="Output mission path")
+def sim_with_tol(mission_path, output) -> None:
+    """Insert takeoff and landing waypoints.
+
+    Example: mavplan simulate with-tol mission.json -o mission_with_tol.json
+    """
+    try:
+        mission = Mission.load(mission_path)
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        sys.exit(1)
+
+    params = SimulationParams()
+    new_mission = insert_takeoff_landing(mission, params)
+    click.echo(f"  Added takeoff/landing: {len(mission)} -> {len(new_mission)} waypoints")
+
+    if output:
+        new_mission.save(output)
+        click.echo(f"  Saved to {output}")
+
+
+# ------------------------------------------------------------------
 # root
 # ------------------------------------------------------------------
 @click.group()
@@ -816,6 +941,11 @@ main.add_command(generate)
 main.add_command(analyze)
 main.add_command(template)
 main.add_command(link)
+main.add_command(simulate)
+main.add_command(simulate)
+main.add_command(simulate)
+main.add_command(simulate)
+main.add_command(simulate)
 
 
 if __name__ == "__main__":

@@ -18,6 +18,21 @@ from .flightlog import (
     parse_mavplan_json,
     compare_to_plan,
 )
+from .kml_import import (
+    KmlDocument,
+    KmlWaypoint,
+    parse_kml,
+    MissionTemplate,
+    get_templates,
+    save_templates_library,
+    load_templates_library,
+)
+from .mavlink_link import (
+    MAVLinkConnection,
+    ConnectionInfo,
+    HeartbeatInfo,
+    ConnectionState,
+)
 
 __all__ = [
     "Mission",
@@ -35,5 +50,16 @@ __all__ = [
     "parse_csv",
     "parse_mavplan_json",
     "compare_to_plan",
+    "KmlDocument",
+    "KmlWaypoint",
+    "parse_kml",
+    "MissionTemplate",
+    "get_templates",
+    "save_templates_library",
+    "load_templates_library",
+    "MAVLinkConnection",
+    "ConnectionInfo",
+    "HeartbeatInfo",
+    "ConnectionState",
 ]
-__version__ = "0.3.0"
+__version__ = "0.5.0"

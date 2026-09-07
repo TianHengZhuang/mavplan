@@ -25,6 +25,17 @@ from .flightlog import (
     parse_mavplan_json,
     compare_to_plan,
 )
+from .kml_import import (
+    KmlDocument,
+    parse_kml,
+    get_templates,
+    save_templates_library,
+    list_templates,
+)
+from .mavlink_link import (
+    MAVLinkConnection,
+    ConnectionState,
+)
 
 MISSION_FILE = Path.home() / ".mavplan" / "mission.json"
 
@@ -586,6 +597,204 @@ def _merge_kml(plan_kml: str, flight_kml: str, mission_name: str) -> str:
 
 
 # ------------------------------------------------------------------
+# template group
+# ------------------------------------------------------------------
+@click.group()
+def template() -> None:
+    """Mission template library."""
+    pass
+
+
+@template.command("list")
+def tmpl_list() -> None:
+    """List all built-in mission templates."""
+    list_templates()
+
+
+@template.command("export")
+@click.argument("output_path", type=click.Path())
+def tmpl_export(output_path: str) -> None:
+    """Export the template library as JSON.
+
+    Example: mavplan template export templates.json
+    """
+    save_templates_library(output_path)
+    click.echo(f"  Saved {len(get_templates())} templates to {output_path}")
+
+
+@template.command("load")
+@click.argument("name")
+@click.option("--output", "-o", type=click.Path(), default="", help="Mission output path")
+def tmpl_load(name: str, output: str) -> None:
+    """Load a template and optionally save as a mission file.
+
+    Example: mavplan template load "Large Area Survey" -o mission.json
+    """
+    templates = get_templates()
+    matched = [t for t in templates if name.lower() in t.name.lower()]
+    if not matched:
+        click.echo(f"  Template not found: {name}", err=True)
+        click.echo(f"  Run 'mavplan template list' to see available templates")
+        sys.exit(1)
+
+    t = matched[0]
+    click.echo(f"  Template: {t.name}")
+    click.echo(f"  Description: {t.description}")
+    click.echo(f"  Category: {t.category}")
+    click.echo(f"  Waypoints: {len(t.mission)}")
+    click.echo(f"  Total distance: {t.mission.total_distance()/1000:.2f} km")
+    click.echo(f"  Est. duration: ~{int(t.mission.estimated_duration()/60)}m")
+
+    if output:
+        t.mission.save(output)
+        click.echo(f"  Saved to {output}")
+
+
+@template.command("import-kml")
+@click.argument("kml_path", type=click.Path(exists=True))
+@click.option("--alt", "default_alt", type=float, default=50.0, help="Default altitude in metres")
+@click.option("--speed", type=float, default=10.0, help="Default speed in m/s")
+@click.option("--output", "-o", type=click.Path(), default="", help="Mission output path")
+def tmpl_import_kml(kml_path: str, default_alt: float, speed: float, output: str) -> None:
+    """Import a KML file as a mission.
+
+    Parses KML Placemarks (Point, LineString, Polygon) and converts
+    coordinates to waypoints.
+
+    Example: mavplan template import-kml site.kml --alt 60 -o mission.json
+    """
+    try:
+        doc = parse_kml(kml_path)
+    except Exception as e:
+        click.echo(f"  Error parsing KML: {e}", err=True)
+        sys.exit(1)
+
+    if not doc.waypoints:
+        click.echo(f"  No waypoints found in KML", err=True)
+        sys.exit(1)
+
+    mission = doc.to_mission(default_alt=default_alt, default_speed=speed)
+    click.echo(f"  Imported {len(mission)} waypoints from KML")
+    click.echo(f"  KML name: {doc.name or '(unnamed)'}")
+    click.echo(f"  Total distance: {mission.total_distance()/1000:.2f} km")
+
+    if output:
+        mission.save(output)
+        click.echo(f"  Saved to {output}")
+
+
+# ------------------------------------------------------------------
+# link group (MAVLink connection)
+# ------------------------------------------------------------------
+@click.group()
+def link() -> None:
+    """Connect to autopilot via MAVLink and upload/download missions.
+
+    Requires pymavlink: pip install pymavlink
+    """
+    pass
+
+
+@link.command("status")
+@click.argument("device", default="udp:127.0.0.1:14550")
+def link_status(device: str) -> None:
+    """Show autopilot connection status.
+
+    Example: mavplan link status udp:127.0.0.1:14550
+             mavplan link status serial:COM3:57600
+    """
+    try:
+        conn = MAVLinkConnection.connect(device)
+    except ImportError:
+        click.echo("  Error: pymavlink not installed", err=True)
+        click.echo("  Install with: pip install pymavlink", err=True)
+        sys.exit(1)
+    except ConnectionError as e:
+        click.echo(f"  Connection failed: {e}", err=True)
+        sys.exit(1)
+
+    hb = conn.last_heartbeat
+    click.echo(f"  Connected to {device}")
+    click.echo(f"  State: {conn.state.value}")
+    click.echo(f"  Autopilot: {hb.autopilot_type}")
+    click.echo(f"  Type: {hb.system_type}")
+    click.echo(f"  Status: {hb.system_status}")
+    click.echo(f"  Armed: {hb.armed}")
+    click.echo(f"  Mode: AUTO" if hb.auto_mode else "  Mode: MANUAL")
+    conn.close()
+
+
+@link.command("upload")
+@click.argument("device", default="udp:127.0.0.1:14550")
+@click.argument("mission_path", type=click.Path(exists=True))
+def link_upload(device: str, mission_path: str) -> None:
+    """Upload a mission to the autopilot.
+
+    Example: mavplan link upload udp:127.0.0.1:14550 mission.json
+             mavplan link upload serial:COM3:57600 survey.json
+    """
+    try:
+        conn = MAVLinkConnection.connect(device)
+    except ImportError:
+        click.echo("  Error: pymavlink not installed", err=True)
+        click.echo("  Install with: pip install pymavlink", err=True)
+        sys.exit(1)
+    except ConnectionError as e:
+        click.echo(f"  Connection failed: {e}", err=True)
+        sys.exit(1)
+
+    try:
+        mission = Mission.load(mission_path)
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        conn.close()
+        sys.exit(1)
+
+    click.echo(f"  Uploading '{mission.name}' ({len(mission)} waypoints)...")
+    result = conn.upload_mission(mission)
+    if result["success"]:
+        click.echo(f"  OK: {result['message']}")
+    else:
+        click.echo(f"  FAILED: {result['message']}", err=True)
+    conn.close()
+
+
+@link.command("download")
+@click.argument("device", default="udp:127.0.0.1:14550")
+@click.argument("output_path", type=click.Path())
+def link_download(device: str, output_path: str) -> None:
+    """Download the current mission from the autopilot.
+
+    Example: mavplan link download udp:127.0.0.1:14550 downloaded.json
+    """
+    try:
+        conn = MAVLinkConnection.connect(device)
+    except ImportError:
+        click.echo("  Error: pymavlink not installed", err=True)
+        click.echo("  Install with: pip install pymavlink", err=True)
+        sys.exit(1)
+    except ConnectionError as e:
+        click.echo(f"  Connection failed: {e}", err=True)
+        sys.exit(1)
+
+    click.echo(f"  Downloading mission from autopilot...")
+    success, result = conn.download_mission()
+    if not success:
+        click.echo(f"  FAILED: {result}", err=True)
+        conn.close()
+        sys.exit(1)
+
+    mission = Mission(name="Downloaded Mission")
+    for wp in result:
+        mission.add_waypoint(lat=wp.lat, lon=wp.lon, alt=wp.alt,
+                             speed=wp.speed, delay=wp.delay, yaw=wp.yaw)
+
+    mission.save(output_path)
+    click.echo(f"  Downloaded {len(mission)} waypoints -> {output_path}")
+    conn.close()
+
+
+# ------------------------------------------------------------------
 # root
 # ------------------------------------------------------------------
 @click.group()
@@ -605,6 +814,8 @@ main.add_command(mission)
 main.add_command(export)
 main.add_command(generate)
 main.add_command(analyze)
+main.add_command(template)
+main.add_command(link)
 
 
 if __name__ == "__main__":

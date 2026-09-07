@@ -25,6 +25,18 @@ from mavplan.flightlog import (
     parse_csv,
     compare_to_plan,
 )
+from mavplan.kml_import import (
+    KmlDocument,
+    KmlWaypoint,
+    parse_kml,
+    get_templates,
+    MissionTemplate,
+)
+from mavplan.mavlink_link import (
+    MAVLinkConnection,
+    ConnectionState,
+    HeartbeatInfo,
+)
 
 
 class TestWaypoint:
@@ -453,4 +465,109 @@ class TestCompareToPlan:
         assert result["waypoint_hits_20m"] == 1
         assert result["waypoint_hits_50m"] == 1  # third waypoint far away
         assert result["total_plan_waypoints"] == 3
+
+
+class TestKmlImport:
+    def test_parse_kml_basic(self, tmp_path):
+        kml_file = tmp_path / "site.kml"
+        kml_file.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<kml xmlns="http://www.opengis.net/kml/2.2">\n'
+            '<Document><name>Test Site</name>\n'
+            '<Placemark><name>WP1</name>\n'
+            '<Point><coordinates>121.470,31.230,50</coordinates></Point>\n'
+            '</Placemark>\n'
+            '<Placemark><name>WP2</name>\n'
+            '<Point><coordinates>121.471,31.231,55</coordinates></Point>\n'
+            '</Placemark>\n'
+            '</Document></kml>',
+            encoding="utf-8",
+        )
+        doc = parse_kml(kml_file)
+        assert doc.name == "Test Site"
+        assert len(doc.waypoints) == 2
+        assert doc.waypoints[0].lat == pytest.approx(31.230)
+        assert doc.waypoints[0].lon == pytest.approx(121.470)
+        assert doc.waypoints[0].alt == pytest.approx(50.0)
+        assert doc.waypoints[0].name == "WP1"
+
+    def test_kml_linestring(self, tmp_path):
+        kml_file = tmp_path / "path.kml"
+        kml_file.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<kml xmlns="http://www.opengis.net/kml/2.2">\n'
+            '<Document><Placemark>\n'
+            '<LineString><coordinates>121.470,31.230,50 121.471,31.231,55 121.472,31.232,60</coordinates></LineString>\n'
+            '</Placemark></Document></kml>',
+            encoding="utf-8",
+        )
+        doc = parse_kml(kml_file)
+        assert len(doc.waypoints) == 3
+
+    def test_kml_to_mission(self, tmp_path):
+        kml_file = tmp_path / "site.kml"
+        kml_file.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<kml xmlns="http://www.opengis.net/kml/2.2">\n'
+            '<Document><Placemark><Point><coordinates>121.470,31.230,50</coordinates></Point></Placemark>\n'
+            '<Placemark><Point><coordinates>121.471,31.231,60</coordinates></Point></Placemark>\n'
+            '</Document></kml>',
+            encoding="utf-8",
+        )
+        doc = parse_kml(kml_file)
+        mission = doc.to_mission(default_alt=50.0, default_speed=10.0)
+        assert len(mission) == 2
+        assert mission[0].alt == 50.0
+        assert mission[1].alt == 60.0
+
+    def test_kml_not_found_raises(self):
+        with pytest.raises(ValueError, match="not found"):
+            parse_kml("/nonexistent.kml")
+
+
+class TestTemplates:
+    def test_get_templates_returns_list(self):
+        templates = get_templates()
+        assert len(templates) >= 5
+        for t in templates:
+            assert t.name
+            assert t.category
+            assert len(t.mission) > 0
+
+    def test_template_to_dict_roundtrip(self):
+        templates = get_templates()
+        t = templates[0]
+        d = t.to_dict()
+        assert d["name"] == t.name
+        assert d["category"] == t.category
+        restored = MissionTemplate.from_dict(d)
+        assert restored.name == t.name
+        assert len(restored.mission) == len(t.mission)
+
+    def test_template_categories(self):
+        templates = get_templates()
+        categories = {t.category for t in templates}
+        assert "survey" in categories
+        assert "inspection" in categories
+
+
+class TestMavlinkLink:
+    def test_connection_state_enum(self):
+        assert ConnectionState.DISCONNECTED.value == "disconnected"
+        assert ConnectionState.CONNECTING.value == "connecting"
+        assert ConnectionState.CONNECTED.value == "connected"
+
+    def test_heartbeat_info_default(self):
+        hb = HeartbeatInfo()
+        assert hb.armed is False
+        assert hb.autopilot_type == ""
+        assert hb.system_status == ""
+
+    def test_connection_info_default(self):
+        from mavplan.mavlink_link import ConnectionInfo
+        info = ConnectionInfo(device="/dev/ttyUSB0")
+        assert info.device == "/dev/ttyUSB0"
+        assert info.baudrate == 57600
+        assert info.target_system == 1
+
 

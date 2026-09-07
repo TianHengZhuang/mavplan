@@ -10,6 +10,14 @@ from .pattern import (
     generate_polygon_scan,
     generate_orbit,
 )
+from .flightlog import (
+    FlightLog,
+    FlightStats,
+    FlightPoint,
+    parse_csv,
+    parse_mavplan_json,
+    compare_to_plan,
+)
 
 __all__ = [
     "Mission",
@@ -21,5 +29,11 @@ __all__ = [
     "generate_lawnmower",
     "generate_polygon_scan",
     "generate_orbit",
+    "FlightLog",
+    "FlightStats",
+    "FlightPoint",
+    "parse_csv",
+    "parse_mavplan_json",
+    "compare_to_plan",
 ]
-__version__ = "0.2.0"
+__version__ = "0.3.0"

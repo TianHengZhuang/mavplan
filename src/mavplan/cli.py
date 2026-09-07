@@ -18,6 +18,13 @@ from .pattern import (
     generate_polygon_scan,
     generate_orbit,
 )
+from .flightlog import (
+    FlightLog,
+    FlightStats,
+    parse_csv,
+    parse_mavplan_json,
+    compare_to_plan,
+)
 
 MISSION_FILE = Path.home() / ".mavplan" / "mission.json"
 
@@ -408,6 +415,177 @@ def _parse_latlon(s: str) -> tuple[float, float]:
 
 
 # ------------------------------------------------------------------
+# analyze group
+# ------------------------------------------------------------------
+@click.group()
+def analyze() -> None:
+    """Analyze flight logs and compare to planned missions."""
+    pass
+
+
+@analyze.command()
+@click.argument("csv_path", type=click.Path(exists=True))
+def log(csv_path: str) -> None:
+    """Analyze a CSV flight log and print statistics.
+
+    Supported formats:
+      - QGroundControl CSV exports
+      - Mission Planner CSV exports
+      - Generic GPS CSV (must contain lat/lon columns)
+
+    Example: mavplan analyze log flight_log.csv
+    """
+    try:
+        fl = parse_csv(csv_path)
+    except Exception as e:
+        click.echo(f"  Error parsing {csv_path}: {e}", err=True)
+        sys.exit(1)
+
+    stats = fl.stats()
+    click.echo(f"  Source: {fl.source_file}")
+    click.echo(f"  Points: {stats.num_points}")
+    click.echo("")
+    click.echo(f"  Distance:")
+    click.echo(f"    Total path: {stats.total_distance_m/1000:.2f} km")
+    click.echo(f"    Straight line: {stats.horizontal_distance_m/1000:.2f} km")
+    click.echo("")
+    click.echo(f"  Altitude:")
+    click.echo(f"    Min: {stats.min_altitude_m:.1f} m")
+    click.echo(f"    Max: {stats.max_altitude_m:.1f} m")
+    click.echo(f"    Range: {stats.max_altitude_change_m:.1f} m")
+    click.echo("")
+    click.echo(f"  Speed:")
+    click.echo(f"    Avg: {stats.avg_speed_mps:.1f} m/s ({stats.avg_speed_mps*3.6:.1f} km/h)")
+    click.echo(f"    Max: {stats.max_speed_mps:.1f} m/s ({stats.max_speed_mps*3.6:.1f} km/h)")
+    click.echo("")
+    dur = stats.flight_duration_s
+    if dur >= 3600:
+        dur_str = f"{int(dur//3600)}h {int((dur%3600)//60)}m {int(dur%60)}s"
+    elif dur >= 60:
+        dur_str = f"{int(dur//60)}m {int(dur%60)}s"
+    else:
+        dur_str = f"{dur:.1f}s"
+    click.echo(f"  Duration: {dur_str}")
+    click.echo("")
+    click.echo(f"  Start: {stats.start_lat:.7f}, {stats.start_lon:.7f}")
+    click.echo(f"  End:   {stats.end_lat:.7f}, {stats.end_lon:.7f}")
+
+
+@analyze.command()
+@click.argument("csv_path", type=click.Path(exists=True))
+@click.argument("plan_path", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), default="", help="KML output path")
+def compare(csv_path: str, plan_path: str, output: str) -> None:
+    """Compare a flight log against a planned mission.
+
+    Outputs coverage statistics and optionally writes a KML overlay
+    with both the planned route (green) and actual flight path (blue).
+
+    Example:
+      mavplan analyze compare flight.csv plan.json -o comparison.kml
+    """
+    try:
+        fl = parse_csv(csv_path)
+    except Exception as e:
+        click.echo(f"  Error parsing flight log {csv_path}: {e}", err=True)
+        sys.exit(1)
+
+    try:
+        plan = Mission.load(plan_path)
+    except Exception as e:
+        click.echo(f"  Error loading plan {plan_path}: {e}", err=True)
+        sys.exit(1)
+
+    result = compare_to_plan(fl, plan)
+    if "error" in result:
+        click.echo(f"  Error: {result['error']}", err=True)
+        sys.exit(1)
+
+    click.echo(f"  Mission: {plan.name}")
+    click.echo(f"  Flight log: {fl.source_file}")
+    click.echo("")
+    click.echo(f"  Distance:")
+    click.echo(f"    Planned: {result['plan_distance_m']/1000:.2f} km")
+    click.echo(f"    Flown:   {result['flight_distance_m']/1000:.2f} km")
+    click.echo(f"    Coverage: {result['coverage_ratio']:.0%}")
+    click.echo("")
+    click.echo(f"  Waypoint hit rate:")
+    click.echo(f"    Within 10m: {result['waypoint_hits_10m']}/{result['total_plan_waypoints']}")
+    click.echo(f"    Within 20m: {result['waypoint_hits_20m']}/{result['total_plan_waypoints']}")
+    click.echo(f"    Within 50m: {result['waypoint_hits_50m']}/{result['total_plan_waypoints']}")
+    click.echo("")
+    click.echo(f"  Altitude:")
+    click.echo(f"    Avg deviation: {result['avg_altitude_error_m']:.1f} m")
+
+    if output:
+        stats = fl.stats()
+        plan_kml = plan.to_kml().replace(
+            "ff0000ff", "ff00ff00")  # green for plan
+        flight_kml = fl.to_kml(color="ff0000ff")  # blue for flight
+        combined = _merge_kml(plan_kml, flight_kml, plan.name)
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(combined, encoding="utf-8")
+        click.echo(f"")
+        click.echo(f"  KML saved to {output}")
+        click.echo("  Green=planned route  Blue=actual flight")
+
+
+@analyze.command()
+@click.argument("csv_path", type=click.Path(exists=True))
+@click.option("--output", "-o", type=click.Path(), default="", help="KML output path")
+def kml(csv_path: str, output: str) -> None:
+    """Export a CSV flight log as KML.
+
+    Example: mavplan analyze kml flight.csv -o flight.kml
+    """
+    try:
+        fl = parse_csv(csv_path)
+    except Exception as e:
+        click.echo(f"  Error parsing {csv_path}: {e}", err=True)
+        sys.exit(1)
+
+    kml_content = fl.to_kml(name="Flight Log - " + Path(csv_path).stem)
+    if not output or output == "-":
+        click.echo(kml_content)
+    else:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(kml_content, encoding="utf-8")
+        click.echo(f"  KML saved to {output} ({len(fl)} points)")
+
+
+def _merge_kml(plan_kml: str, flight_kml: str, mission_name: str) -> str:
+    """Merge two KML documents into one with both paths."""
+    # Extract Document content from each KML
+    def extract_body(kml_str: str) -> str:
+        start = kml_str.find("<Document>")
+        end = kml_str.find("</Document>")
+        if start == -1 or end == -1:
+            return ""
+        return kml_str[start + len("<Document>"):end]
+
+    plan_body = extract_body(plan_kml)
+    flight_body = extract_body(flight_kml)
+
+    return f"""\
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>{mission_name} - Planned vs Actual</name>
+    <description>Green = planned route | Blue = actual flight</description>
+    <Style id="plan_track">
+      <LineStyle><color>ff00ff00</color><width>4</width></LineStyle>
+    </Style>
+    <Style id="flight_track">
+      <LineStyle><color>ff0000ff</color><width>3</width></LineStyle>
+    </Style>
+{plan_body}
+{flight_body}
+  </Document>
+</kml>
+"""
+
+
+# ------------------------------------------------------------------
 # root
 # ------------------------------------------------------------------
 @click.group()
@@ -426,6 +604,7 @@ main.add_command(waypoint)
 main.add_command(mission)
 main.add_command(export)
 main.add_command(generate)
+main.add_command(analyze)
 
 
 if __name__ == "__main__":

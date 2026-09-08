@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mavplan"
-version = "0.6.0"
+version = "1.0.0"
 description = "MAVLink mission planner: define waypoints and export to MAVLink, KML, CSV"
 readme = "README.md"
 license = { text = "MIT" }
@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["drone", "uav", "mavlink", "mission-planning", "waypoint", "px4", "ardupilot"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -24,7 +24,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: GIS",
-    "Topic :: Scientific/Engineering :: Aerospace",
 ]
 dependencies = [
     "click>=8.0",
@@ -41,4 +40,3 @@ packages = ["src/mavplan"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "auto"

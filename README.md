@@ -106,6 +106,14 @@ conn.close()
 
 ## Changelog
 
+### v1.0.0 (2026-09-08)
+- **Stable release**: full feature set (mission planning, patterns, log analysis, MAVLink link, KML/templates, simulation) with a stable public API
+- Fixed bug in `compare_to_plan()`: waypoint hit rates (10m/20m/50m) are now computed correctly as cumulative within-radius counts (previously a waypoint within 10m was not counted for the 20m/50m radii)
+- Fixed packaging metadata: removed invalid PyPI classifier that blocked wheel builds
+- CLI: `waypoint add` now validates coordinates before saving (rejects out-of-range lat/lon with a clear error)
+- Test suite: 76 tests (100% passing) covering all public modules plus CLI end-to-end via `click.testing` (76% line coverage; `mavlink_link` remains lightly covered as it needs a live autopilot)
+- Development status upgraded to Production/Stable
+
 ### v0.5.0 (2026-09-07)
 - Added KML file import: parse Google Earth KML as mission waypoints
 - Added built-in mission template library (5 templates: survey, inspection, emergency, patrol, mapping)

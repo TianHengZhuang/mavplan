@@ -1,0 +1,109 @@
+{
+  "name": "\u53c2\u8003\u822a\u7ebf seed=20260908",
+  "frame": 3,
+  "home": [
+    31.195894625526286,
+    121.39504936758902,
+    0.0
+  ],
+  "waypoints": [
+    {
+      "seq": 0,
+      "lat": 31.195894625526286,
+      "lon": 121.39504936758902,
+      "alt": 0.0,
+      "speed": 9.581859238763316,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 1,
+      "lat": 31.198670281964972,
+      "lon": 121.39538925708948,
+      "alt": 65.07023466811023,
+      "speed": 9.581859238763316,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 2,
+      "lat": 31.19388740864914,
+      "lon": 121.40380471356927,
+      "alt": 65.07023466811023,
+      "speed": 9.581859238763316,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 3,
+      "lat": 31.190213953341296,
+      "lon": 121.39739059507122,
+      "alt": 65.07023466811023,
+      "speed": 9.581859238763316,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 4,
+      "lat": 31.19601148884728,
+      "lon": 121.38266671996091,
+      "alt": 65.07023466811023,
+      "speed": 9.581859238763316,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 5,
+      "lat": 31.18867972571118,
+      "lon": 121.40280134604461,
+      "alt": 65.07023466811023,
+      "speed": 9.581859238763316,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 6,
+      "lat": 31.195894625526286,
+      "lon": 121.39504936758902,
+      "alt": 0.0,
+      "speed": 9.581859238763316,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    }
+  ]
+}

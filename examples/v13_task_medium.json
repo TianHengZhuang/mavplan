@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "name": "超视距航线规划考核·中级",
+  "description": "从起飞点完成起飞，按自选顺序飞越全部必过航点，覆盖指定作业区域后返回降落。巡航高度须保持在 50~85m，速度 7~13m/s，全程 20 分钟内完成、航程不超过 9.4km。航线不得进入禁飞区。",
+  "difficulty": "medium",
+  "home": [
+    31.1958946,
+    121.3950494,
+    0.0
+  ],
+  "required": [
+    {
+      "name": "A",
+      "lat": 31.1938874,
+      "lon": 121.4038047,
+      "radius_m": 20.0,
+      "kind": "point"
+    },
+    {
+      "name": "B",
+      "lat": 31.1986703,
+      "lon": 121.3953893,
+      "radius_m": 20.0,
+      "kind": "point"
+    },
+    {
+      "name": "C",
+      "lat": 31.1960115,
+      "lon": 121.3826667,
+      "radius_m": 20.0,
+      "kind": "point"
+    },
+    {
+      "name": "D",
+      "lat": 31.190214,
+      "lon": 121.3973906,
+      "radius_m": 20.0,
+      "kind": "point"
+    },
+    {
+      "name": "区域1",
+      "lat": 31.1886797,
+      "lon": 121.4028013,
+      "radius_m": 80.0,
+      "kind": "area"
+    }
+  ],
+  "altitude_range": [
+    50.0,
+    85.0
+  ],
+  "speed_range": [
+    7.0,
+    13.0
+  ],
+  "max_time_s": 1197.8,
+  "max_distance_m": 9370.0,
+  "no_fly_zones": [
+    {
+      "name": "禁飞区1",
+      "lat": 31.2045655,
+      "lon": 121.3967901,
+      "radius_m": 58.2,
+      "kind": "circle"
+    }
+  ]
+}

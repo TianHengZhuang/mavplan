@@ -48,6 +48,10 @@ from .simulate import (
     check_geofence,
     generate_report,
 )
+from .taskspec import TaskSpec
+from .taskgen import generate_task
+from .grade import grade_flight
+from .report_html import render_report
 
 MISSION_FILE = Path.home() / ".mavplan" / "mission.json"
 
@@ -804,6 +808,126 @@ def tmpl_import_kml(kml_path: str, default_alt: float, speed: float, output: str
 
 
 # ------------------------------------------------------------------
+# task group (v1.3 teaching suite)
+# ------------------------------------------------------------------
+@click.group()
+def task() -> None:
+    """Teaching suite: exam briefs, auto grading, HTML score reports."""
+    pass
+
+
+def _echo_task_summary(spec: TaskSpec) -> None:
+    click.echo(f"  Task: {spec.name}")
+    click.echo(f"  Difficulty: {spec.difficulty}  |  Home: {spec.home[0]:.6f},{spec.home[1]:.6f} alt {spec.home[2]:.0f}m")
+    click.echo(f"  Description: {spec.description}")
+    for cp in spec.required:
+        kind = "required point" if cp.kind == "point" else "required area"
+        click.echo(f"    - {kind} '{cp.name}': {cp.lat:.6f},{cp.lon:.6f} radius {cp.radius_m:.0f}m")
+    click.echo(f"  Altitude window: {spec.altitude_range[0]:.0f}-{spec.altitude_range[1]:.0f} m")
+    click.echo(f"  Speed window:    {spec.speed_range[0]:.0f}-{spec.speed_range[1]:.0f} m/s")
+    click.echo(f"  Time limit:      {spec.max_time_s:.0f} s")
+    click.echo(f"  Distance limit:  {spec.max_distance_m:.0f} m")
+    if spec.no_fly_zones:
+        for z in spec.no_fly_zones:
+            click.echo(f"    - no-fly zone '{z.name}': {z.lat:.6f},{z.lon:.6f} radius {z.radius_m:.0f}m")
+    else:
+        click.echo("  No-fly zones: none")
+
+
+@task.command("generate")
+@click.option("--seed", type=int, required=True, help="Deterministic random seed")
+@click.option("--difficulty", type=click.Choice(["easy", "medium", "hard"]), default="easy",
+              help="Difficulty level")
+@click.option("--name", default="", help="Task title")
+@click.option("--output", "-o", type=click.Path(), default="task.json", help="Output task brief JSON")
+@click.option("--plan-out", "plan_out", type=click.Path(), default="", help="Optional gold reference mission output")
+def task_generate(seed: int, difficulty: str, name: str, output: str, plan_out: str) -> None:
+    """Generate an exam brief (+ optional gold route) from a seed.
+
+    Example: mavplan task generate --seed 42 --difficulty medium -o task.json --plan-out gold.json
+    """
+    try:
+        gen = generate_task(seed=seed, difficulty=difficulty, name=name)
+    except Exception as e:
+        click.echo(f"  Error generating task: {e}", err=True)
+        sys.exit(1)
+
+    gen.spec.save(output)
+    click.echo(f"  Generated task -> {output}")
+    _echo_task_summary(gen.spec)
+    if plan_out:
+        gen.gold_mission.save(plan_out)
+        click.echo(f"  Gold reference route -> {plan_out} "
+                   f"({len(gen.gold_mission)} waypoints, "
+                   f"{gen.gold_mission.total_distance()/1000:.2f} km)")
+
+
+@task.command("view")
+@click.argument("task_path", type=click.Path(exists=True))
+def task_view(task_path: str) -> None:
+    """Print an exam brief.
+
+    Example: mavplan task view task.json
+    """
+    try:
+        spec = TaskSpec.load(task_path)
+    except Exception as e:
+        click.echo(f"  Error loading task: {e}", err=True)
+        sys.exit(1)
+    errors = spec.validate()
+    if errors:
+        click.echo(f"  Task has {len(errors)} validation error(s):", err=True)
+        for err in errors:
+            click.echo(f"    - {err}", err=True)
+        sys.exit(1)
+    _echo_task_summary(spec)
+
+
+@task.command("grade")
+@click.argument("task_path", type=click.Path(exists=True))
+@click.argument("flight_csv", type=click.Path(exists=True))
+@click.option("--plan", "plan_path", type=click.Path(exists=True), default="",
+              help="Planned mission (JSON/WPL/.plan) for trajectory overlay")
+@click.option("--student", default="", help="Trainee name shown in the report")
+@click.option("--out", "-o", type=click.Path(), default="", help="HTML score report output path")
+def task_grade(task_path: str, flight_csv: str, plan_path: str, student: str, out: str) -> None:
+    """Grade a flight log against an exam brief and emit an HTML report.
+
+    Example: mavplan task grade task.json flight.csv --plan gold.json --student 张三 -o report.html
+    """
+    try:
+        spec = TaskSpec.load(task_path)
+        flight = parse_csv(flight_csv)
+    except Exception as e:
+        click.echo(f"  Error loading inputs: {e}", err=True)
+        sys.exit(1)
+
+    plan = None
+    if plan_path:
+        try:
+            plan = load_mission_file(plan_path)
+        except Exception as e:
+            click.echo(f"  Error loading plan: {e}", err=True)
+            sys.exit(1)
+
+    result = grade_flight(spec, flight, plan=plan, student=student)
+    click.echo(f"  Student : {result.student}")
+    click.echo(f"  Task    : {result.task_name}")
+    click.echo(f"  Score   : {result.score:.1f} / 100  ({result.level})")
+    click.echo(f"  Passed  : {'是' if result.passed else '否'}")
+    if result.deductions:
+        click.echo("  Deductions:")
+        for d in result.deductions:
+            click.echo(f"    - {d.message}")
+    else:
+        click.echo("  Deductions: none")
+
+    if out:
+        render_report(spec, result, flight, plan=plan, output_path=out)
+        click.echo(f"  Report -> {out}")
+
+
+# ------------------------------------------------------------------
 # link group (MAVLink connection)
 # ------------------------------------------------------------------
 @click.group()
@@ -1052,6 +1176,7 @@ main.add_command(analyze)
 main.add_command(template)
 main.add_command(link)
 main.add_command(simulate)
+main.add_command(task)
 
 
 if __name__ == "__main__":

@@ -54,7 +54,18 @@ from .simulate import (
 from .taskspec import TaskSpec
 from .taskgen import generate_task
 from .grade import grade_flight
-from .report_html import render_report
+from .report_html import render_report, render_survey_report
+from .survey import (
+    CAMERA_PRESETS,
+    Camera,
+    altitude_for_gsd_m,
+    camera_for,
+    format_survey_check_text,
+    lane_spacing_m,
+    lesson_sections,
+    survey_check,
+    survey_plan,
+)
 from .nofly import (
     PreflightParams,
     load_zones_from_kml,
@@ -488,14 +499,30 @@ def generate() -> None:
               default="nw", help="Start corner (north-west by default)")
 @click.option("--from-outer/--from-inner", "start_from_outer", default=True,
               help="Start from outer edge (default: outer)")
+@click.option("--camera", "camera_name", default=None,
+              help="Camera preset (v1.5): auto-compute lane spacing from FOV/overlap")
+@click.option("--overlap-side", "overlap_side", type=float, default=0.60,
+              help="Side (lateral) overlap used with --camera (default 0.60)")
 @click.option("--save/--no-save", "auto_save", default=True)
-def lawnmower(corner1, corner2, altitude, speed, lane_spacing, start_corner, start_from_outer, auto_save) -> None:
+def lawnmower(corner1, corner2, altitude, speed, lane_spacing, start_corner, start_from_outer,
+              camera_name, overlap_side, auto_save) -> None:
     """Generate a rectangular lawn-mower (survey) pattern.
 
     Example: --corner1 31.230,121.470 --corner2 31.235,121.480 --alt 50
     """
     lat1, lon1 = _parse_latlon(corner1)
     lat2, lon2 = _parse_latlon(corner2)
+    camera = None
+    if camera_name:
+        try:
+            camera = camera_for(camera_name)
+        except ValueError as exc:
+            raise click.ClickException(str(exc))
+        lane_spacing = lane_spacing_m(camera, altitude, overlap_side)
+        click.echo(
+            f"  Camera {camera.name}: lane spacing auto = {lane_spacing:.1f} m "
+            f"(alt {altitude:.0f} m, side overlap {overlap_side * 100:.0f}%)"
+        )
     params = LawnMowerParams(
         corner1=(lat1, lon1),
         corner2=(lat2, lon2),
@@ -1297,6 +1324,105 @@ def sim_lost_link(mission_path: str, lost_at: float, fail_safe: str, rtl_speed: 
 
 
 # ------------------------------------------------------------------
+# survey group (v1.5)
+# ------------------------------------------------------------------
+@click.group()
+def survey() -> None:
+    """Survey / photogrammetry teaching tools (camera model, GSD, overlap)."""
+    pass
+
+
+def _camera_from_parts(name: str, sensor_w_mm, sensor_h_mm, focal_mm, w_px, h_px) -> Camera:
+    base = camera_for(name)
+    overrides = {}
+    if sensor_w_mm is not None:
+        overrides["sensor_width_mm"] = sensor_w_mm
+    if sensor_h_mm is not None:
+        overrides["sensor_height_mm"] = sensor_h_mm
+    if focal_mm is not None:
+        overrides["focal_length_mm"] = focal_mm
+    if w_px is not None:
+        overrides["sensor_width_px"] = w_px
+    if h_px is not None:
+        overrides["sensor_height_px"] = h_px
+    if not overrides:
+        return base
+    import dataclasses
+    return dataclasses.replace(base, **overrides)
+
+
+@survey.command("calc")
+@click.option("--camera", "camera_name", default="p4rtk",
+              help=f"Camera preset name ({', '.join(sorted(CAMERA_PRESETS))})")
+@click.option("--sensor-w-mm", type=float, default=None, help="Override sensor width (mm)")
+@click.option("--sensor-h-mm", type=float, default=None, help="Override sensor height (mm)")
+@click.option("--focal-mm", type=float, default=None, help="Override focal length (mm)")
+@click.option("--w-px", type=int, default=None, help="Override sensor width (px)")
+@click.option("--h-px", type=int, default=None, help="Override sensor height (px)")
+@click.option("--alt", "altitude", type=float, required=True, help="Survey altitude in metres")
+@click.option("--side-overlap", type=float, default=0.60, help="Side overlap (0-1)")
+@click.option("--forward-overlap", type=float, default=0.70, help="Forward overlap (0-1)")
+@click.option("--gsd-target", "gsd_target_m", type=float, default=None,
+              help="Target GSD in metres (prints recommended altitude)")
+def survey_calc(camera_name, sensor_w_mm, sensor_h_mm, focal_mm, w_px, h_px,
+                altitude, side_overlap, forward_overlap, gsd_target_m) -> None:
+    """Calculate FOV / GSD / footprint / overlap spacing for a camera."""
+    cam = _camera_from_parts(camera_name, sensor_w_mm, sensor_h_mm, focal_mm, w_px, h_px)
+    plan = survey_plan(cam, altitude, side_overlap, forward_overlap)
+    click.echo(f"Camera: {cam.name} — {cam.note or 'custom'}")
+    click.echo(f"  Sensor: {cam.sensor_width_mm:.1f} x {cam.sensor_height_mm:.1f} mm, "
+               f"{cam.sensor_width_px} x {cam.sensor_height_px} px, f={cam.focal_length_mm:.1f} mm")
+    click.echo(f"  FOV: {plan['fov_h_deg']:.1f} deg x {plan['fov_v_deg']:.1f} deg")
+    click.echo(f"  Altitude: {altitude:.0f} m")
+    click.echo(f"  Footprint: {plan['footprint_across_m']:.1f} m (across) x "
+               f"{plan['footprint_along_m']:.1f} m (along)")
+    click.echo(f"  GSD: {plan['gsd_across_m'] * 100:.2f} cm x {plan['gsd_along_m'] * 100:.2f} cm "
+               f"(worst {plan['gsd_m'] * 100:.2f} cm)")
+    click.echo(f"  Recommended lane spacing ({side_overlap * 100:.0f}% side overlap): "
+               f"{plan['recommended_lane_spacing_m']:.1f} m")
+    click.echo(f"  Recommended shutter spacing ({forward_overlap * 100:.0f}% forward overlap): "
+               f"{plan['recommended_forward_spacing_m']:.1f} m")
+    if gsd_target_m:
+        alt = altitude_for_gsd_m(cam, gsd_target_m)
+        click.echo(f"  For GSD <= {gsd_target_m * 100:.2f} cm: max altitude ~ {alt:.1f} m")
+    click.echo("")
+    click.echo("Teaching notes:")
+    for sec in lesson_sections(plan):
+        click.echo(f"  - {sec['title']}: {sec['text']}")
+
+
+@survey.command("check")
+@click.argument("mission_path", type=click.Path(exists=True))
+@click.option("--camera", "camera_name", default="p4rtk",
+              help=f"Camera preset name ({', '.join(sorted(CAMERA_PRESETS))})")
+@click.option("--alt", "alt_fallback_m", type=float, default=None,
+              help="Override cruise altitude (default: mean of mission waypoints)")
+@click.option("--side-overlap", type=float, default=0.60, help="Required side overlap (0-1)")
+@click.option("--forward-overlap", type=float, default=0.70, help="Required forward overlap (0-1)")
+@click.option("--gsd-max", "gsd_max_m", type=float, default=None,
+              help="GSD pass threshold in metres (e.g. 0.05 for 5 cm)")
+@click.option("--out", "-o", type=click.Path(), default="",
+              help="Optional HTML survey teaching report output path")
+def survey_check_cmd(mission_path, camera_name, alt_fallback_m, side_overlap,
+                     forward_overlap, gsd_max_m, out) -> None:
+    """Auto-grade a survey mission against GSD / overlap requirements."""
+    mission = Mission.load(mission_path)
+    cam = camera_for(camera_name)
+    result = survey_check(
+        mission,
+        cam,
+        side_overlap=side_overlap,
+        forward_overlap=forward_overlap,
+        gsd_max_m=gsd_max_m,
+        alt_fallback_m=alt_fallback_m,
+    )
+    click.echo(format_survey_check_text(result))
+    if out:
+        render_survey_report(mission, result, output_path=out)
+        click.echo(f"  HTML teaching report saved to: {out}")
+
+
+# ------------------------------------------------------------------
 # root
 # ------------------------------------------------------------------
 @click.group()
@@ -1320,6 +1446,7 @@ main.add_command(template)
 main.add_command(link)
 main.add_command(simulate)
 main.add_command(task)
+main.add_command(survey)
 
 
 if __name__ == "__main__":

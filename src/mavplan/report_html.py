@@ -376,3 +376,192 @@ def _svg_altitude_profile(flight: FlightLog, task: TaskSpec, e) -> str:
         f'<text x="8" y="{(alt_max - min(alts)) / (alt_max - alt_min) * 220 + 24:.0f}" font-size="11" fill="#555">最高 {max(alts):.0f} m</text>'
     )
     return f'<svg viewBox="0 0 900 240">{band}{profile}{labels}</svg>'
+
+
+# ------------------------------------------------------------------
+# v1.5 survey lesson report
+# ------------------------------------------------------------------
+
+def _survey_svg(mission: Mission, check: dict) -> str:
+    """Simple coverage illustration for a survey mission (inline SVG)."""
+    wps = mission.waypoints()
+    if not wps:
+        return '<svg viewBox="0 0 900 400"></svg>'
+    from .survey import extract_ew_rows
+
+    lat0 = min(w.lat for w in wps)
+    lat1 = max(w.lat for w in wps)
+    lon0 = min(w.lon for w in wps)
+    lon1 = max(w.lon for w in wps)
+    mid_lat = math.radians((lat0 + lat1) / 2)
+    cos_mid = max(math.cos(mid_lat), 1e-12)
+    W_m = max((lon1 - lon0) * _M_PER_DEG_LAT * cos_mid, 1e-6)
+    H_m = max((lat1 - lat0) * _M_PER_DEG_LAT, 1e-6)
+    scale = min(840.0 / W_m, 360.0 / H_m)
+    ox = 30.0 + (840.0 - W_m * scale) / 2.0
+    oy = 40.0 + (360.0 - H_m * scale) / 2.0
+
+    def X(lon: float) -> float:
+        return ox + (lon - lon0) * _M_PER_DEG_LAT * cos_mid * scale
+
+    def Y(lat: float) -> float:
+        return oy + (lat1 - lat) * _M_PER_DEG_LAT * scale
+
+    parts = [f'<rect x="{X(lon0):.1f}" y="{Y(lat1):.1f}" width="{W_m * scale:.1f}" height="{H_m * scale:.1f}" '
+             f'fill="none" stroke="#1a3c6e" stroke-width="1.6" stroke-dasharray="5,4"/>']
+
+    # lanes: swath bands (drawn from extracted rows if available)
+    rows = extract_ew_rows(mission)
+    fp_across = 0.0
+    cam_name = check.get("camera_name")
+    if cam_name:
+        try:
+            from .survey import camera_for
+            cam = camera_for(cam_name)
+            fp_across = cam.footprint_across_m(check.get("altitude_m", 0.0))
+        except Exception:
+            fp_across = 0.0
+    for r in rows:
+        y = Y(r["lat"])
+        if fp_across > 0:
+            half_px = fp_across / 2.0 * scale
+            parts.append(
+                f'<rect x="{X(r["lon_a"]):.1f}" y="{y - half_px:.1f}" '
+                f'width="{abs(X(r["lon_b"]) - X(r["lon_a"])):.1f}" height="{2 * half_px:.1f}" '
+                f'fill="#3498db" fill-opacity="0.16"/>'
+            )
+        parts.append(
+            f'<line x1="{X(r["lon_a"]):.1f}" y1="{y:.1f}" x2="{X(r["lon_b"]):.1f}" y2="{y:.1f}" '
+            f'stroke="#1a3c6e" stroke-width="2" vector-effect="non-scaling-stroke"/>'
+        )
+    # planned waypoint path on top
+    coords = " ".join(
+        f"{X(w.lon):.1f},{Y(w.lat):.1f}" for w in wps
+    )
+    parts.append(
+        f'<polyline points="{coords}" fill="none" stroke="#e67e22" stroke-width="1.6" '
+        f'stroke-opacity="0.8" vector-effect="non-scaling-stroke"/>'
+    )
+    for w in wps[:1]:
+        parts.append(f'<circle cx="{X(w.lon):.1f}" cy="{Y(w.lat):.1f}" r="4" fill="#e67e22"/>')
+    parts.append(
+        f'<text x="{ox}" y="{oy + 30 + H_m * scale:.0f}" font-size="12" fill="#555">'
+        f'理论覆盖率 {check.get("coverage_ratio", 0) * 100:.1f}%（浅蓝 = 相机覆盖条带）</text>'
+    )
+    return f'<svg viewBox="0 0 900 460" style="background:#fbfcfe">{ "".join(parts) }</svg>'
+
+
+def render_survey_report(
+    mission: Mission,
+    check: dict,
+    output_path: str = "",
+) -> str:
+    """Render a v1.5 survey teaching report (camera math + check results).
+
+    The HTML is self-contained (inline CSS/SVG, no external assets) and
+    includes a Chinese "lesson" section explaining the FOV / GSD /
+    footprint / overlap formulas used by the checker.
+    """
+    from .survey import lesson_sections
+    e = html.escape
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    plan = check.get("plan") or {}
+    cards = [
+        ("FOV", f"{plan.get('fov_h_deg', 0):.1f}° × {plan.get('fov_v_deg', 0):.1f}°", "横向 × 纵向"),
+        ("GSD", f"{plan.get('gsd_m', 0) * 100:.2f} cm", f"最差 {check.get('gsd_worst_cm', 0):.1f} cm"),
+        ("横向覆盖", f"{plan.get('footprint_across_m', 0):.0f} m", "垂直航迹"),
+        ("建议行距", f"{plan.get('recommended_lane_spacing_m', 0):.1f} m", f"旁向重叠 {plan.get('side_overlap', 0) * 100:.0f}%"),
+    ]
+    cards_html = "".join(
+        f'<div class="metric"><div class="metric-label">{label}</div>'
+        f'<div class="metric-value">{val}</div><div class="metric-sub">{sub}</div></div>'
+        for label, val, sub in cards
+    )
+    rows_html = "".join(
+        f"<tr><th>{label}</th><td>{val}</td></tr>"
+        for label, val in [
+            ("相机", f"{e(check.get('camera_name', '—'))}（{e(check.get('camera_note', ''))}）"),
+            ("任务航高", f"{check.get('altitude_m', 0):.1f} m"),
+            ("航向覆盖", f"{plan.get('footprint_along_m', 0):.1f} m（拍照间距建议 {plan.get('recommended_forward_spacing_m', 0):.1f} m）"),
+            ("横向 GSD / 纵向 GSD",
+             f"{plan.get('gsd_across_m', 0) * 100:.2f} cm / {plan.get('gsd_along_m', 0) * 100:.2f} cm"),
+            ("航线数", f"{check.get('rows', 0)} 条同纬航线"),
+        ]
+    )
+    level_txt = {"ok": "通过", "info": "提示", "warning": "警告", "error": "不达标"}.get
+    items_rows = "".join(
+        f"<tr><td>{e(it.get('code', ''))}</td>"
+        f"<td>{level_txt(it.get('level'), '提示')}</td>"
+        f"<td>{e(str(it.get('waypoint', '')))}</td>"
+        f"<td>{e(it.get('message', ''))}</td></tr>"
+        for it in check.get("items", [])
+    )
+    lesson_html = "".join(
+        f"<h3>{e(sec['title'])}</h3><p>{e(sec['text'])}</p>"
+        for sec in lesson_sections(plan)
+    )
+    badge_class = "level-a" if not check.get("passed") else "level-b"
+    verdict = "测绘达标检查：通过" if check.get("passed") else "测绘达标检查：未通过"
+
+    html_doc = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>测绘课程报告 · mavplan v1.5</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f2f4f8; color: #222; padding: 24px; }}
+  .wrap {{ max-width: 980px; margin: 0 auto; }}
+  .page {{ background: #fff; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); padding: 32px 36px; }}
+  h1 {{ font-size: 22px; color: #1a3c6e; margin-bottom: 4px; }}
+  h2 {{ font-size: 15px; color: #555; font-weight: 400; margin: 4px 0 16px; }}
+  h3 {{ font-size: 15px; color: #1a3c6e; margin: 26px 0 10px; border-left: 4px solid #1a3c6e; padding-left: 8px; }}
+  .sub {{ color: #777; font-size: 12px; margin-bottom: 18px; }}
+  .verdict {{ display: inline-block; padding: 4px 16px; border-radius: 20px; color: #fff; font-weight: 700; }}
+  .level-a {{ background: #e74c3c; }} .level-b {{ background: #27ae60; }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+  th, td {{ border: 1px solid #dde3ec; padding: 7px 10px; text-align: left; vertical-align: top; }}
+  th {{ background: #f0f4fa; width: 140px; }}
+  .metrics {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }}
+  .metric {{ background: #f7f9fc; border: 1px solid #e3e8f0; border-radius: 8px; padding: 12px; text-align: center; }}
+  .metric-label {{ font-size: 12px; color: #667; }}
+  .metric-value {{ font-size: 20px; font-weight: 700; color: #1a3c6e; }}
+  .metric-sub {{ font-size: 11px; color: #889; margin-top: 4px; }}
+  svg {{ width: 100%; height: auto; border: 1px solid #e3e8f0; border-radius: 8px; }}
+  p {{ font-size: 13px; line-height: 1.9; color: #334; margin-top: 8px; }}
+  .footer {{ text-align: center; color: #99a; font-size: 12px; margin-top: 24px; }}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page">
+    <h1>测绘课程 · 相机与重叠率计算报告</h1>
+    <h2>任务：{e(mission.name)} · 航点数 {len(mission.waypoints())}</h2>
+    <div class="sub">生成时间：{e(now)} · mavplan v1.5 测绘教学套件</div>
+    <p><span class="verdict {badge_class}">{e(verdict)}</span></p>
+
+    <div class="metrics">{cards_html}</div>
+
+    <h3>相机与任务参数</h3>
+    <table><tbody>{rows_html}</tbody></table>
+
+    <h3>覆盖示意（理论）</h3>
+    {_survey_svg(mission, check)}
+
+    <h3>检查明细（自动判分）</h3>
+    <table><thead><tr><th>代码</th><th>级别</th><th>航点</th><th>说明</th></tr></thead>
+    <tbody>{items_rows}</tbody></table>
+
+    <h3>测绘知识点讲解</h3>
+    {lesson_html}
+
+    <div class="footer">本报告由 mavplan 生成，用于测绘无人机培训教学演示。</div>
+  </div>
+</div>
+</body>
+</html>
+"""
+    if output_path:
+        Path(output_path).write_text(html_doc, encoding="utf-8")
+    return html_doc

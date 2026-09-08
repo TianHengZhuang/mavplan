@@ -26,9 +26,12 @@ from .flightlog import FlightLog, compare_to_plan
 from .mission import Mission
 from .taskspec import (
     TaskSpec,
+    Zone,
     haversine_m,
     point_in_circle,
+    point_in_polygon,
     segment_intersects_circle,
+    segment_intersects_polygon,
 )
 
 # ------------------------------------------------------------------
@@ -143,15 +146,21 @@ def grade_flight(
     # ---- no-fly zones -------------------------------------------------
     zone_hits: list[dict] = []
     for zone in task.no_fly_zones:
-        hit = _find_zone_penetration(flight, zone.lat, zone.lon, zone.radius_m)
+        hit = _find_zone_penetration(flight, zone)
         if hit is not None:
             idx, when = hit
             zone_hits.append({"name": zone.name, "idx": idx, "time_s": when})
+            if zone.kind == "polygon":
+                detail = f"进入多边形禁飞区「{zone.name}」内部({zone.shape_label()})"
+            else:
+                detail = (
+                    f"进入禁飞区「{zone.name}」(t≈{when:.0f}s，第 {idx} 个采样点)："
+                    f"与禁飞区中心最近 {zone.radius_m:.0f}m 半径内"
+                )
             deductions.append(Deduction(
                 category="no_fly_zone",
                 message=(
-                    f"进入禁飞区「{zone.name}」(t≈{when:.0f}s，第 {idx} 个采样点)："
-                    f"与禁飞区中心最近 {zone.radius_m:.0f}m 半径内。空域安全为最高优先级，"
+                    f"{detail}。空域安全为最高优先级，"
                     f"扣除 {DEDUCT_NO_FLY_ZONE:.0f} 分"
                 ),
                 points=DEDUCT_NO_FLY_ZONE,
@@ -298,11 +307,31 @@ def _nearest_flight_distance(flight: FlightLog, lat: float, lon: float) -> Optio
     return min(haversine_m(lat, lon, p.lat, p.lon) for p in flight.points)
 
 
-def _find_zone_penetration(flight: FlightLog, c_lat: float, c_lon: float, radius_m: float):
-    """Return (point_index, time_s) of first entry into the circle zone, or None."""
+def _find_zone_penetration(flight: FlightLog, zone: Zone):
+    """Return (point_index, time_s) of first entry into ``zone``, or None.
+
+    Supports circle and polygon zones. Pure tangency does NOT count as an
+    entry (a flight that only grazes the boundary is not penalised), which
+    mirrors ``point_in_circle`` / ``segment_intersects_circle`` semantics.
+    """
     pts = flight.points
     if not pts:
         return None
+
+    if zone.kind == "polygon":
+        ring = zone.polygon_ring()
+        if len(ring) < 3:
+            return None
+        for i, p in enumerate(pts):
+            if point_in_polygon(p.lat, p.lon, ring):
+                return i, p.time_s
+        for i in range(len(pts) - 1):
+            a, b = pts[i], pts[i + 1]
+            if segment_intersects_polygon(a.lat, a.lon, b.lat, b.lon, ring):
+                return i, a.time_s
+        return None
+
+    c_lat, c_lon, radius_m = zone.lat, zone.lon, zone.radius_m
     for i, p in enumerate(pts):
         if point_in_circle(p.lat, p.lon, c_lat, c_lon, radius_m):
             return i, p.time_s

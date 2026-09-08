@@ -47,11 +47,21 @@ from .simulate import (
     insert_takeoff_landing,
     check_geofence,
     generate_report,
+    LostLinkParams,
+    simulate_lost_link,
+    format_lost_link_events,
 )
 from .taskspec import TaskSpec
 from .taskgen import generate_task
 from .grade import grade_flight
 from .report_html import render_report
+from .nofly import (
+    PreflightParams,
+    load_zones_from_kml,
+    load_zones_json,
+    preflight_check,
+    preflight_summary,
+)
 
 MISSION_FILE = Path.home() / ".mavplan" / "mission.json"
 
@@ -292,6 +302,82 @@ def camera(mode: str, value: float, after_seq: int, auto_save: bool) -> None:
     )
     if auto_save:
         _save_mission(m)
+
+
+@mission.command("check")
+@click.argument("mission_path", type=click.Path(exists=True))
+@click.option("--zones-kml", "zones_kml", type=click.Path(exists=True), default=None,
+              help="KML file with Polygon/Point no-fly zones")
+@click.option("--zones-json", "zones_json", type=click.Path(exists=True), default=None,
+              help="JSON file with zone definitions (circle/polygon)")
+@click.option("--max-distance", "max_distance", type=float, default=500.0,
+              help="Max range from home in metres")
+@click.option("--max-altitude", "max_altitude", type=float, default=120.0,
+              help="Max altitude in metres")
+@click.option("--cruise-speed", "cruise_speed", type=float, default=10.0,
+              help="Assumed cruise speed in m/s (fallback)")
+@click.option("--bank-deg", "bank_deg", type=float, default=35.0,
+              help="Maximum bank/slope angle for turns (deg)")
+@click.option("--capacity", "cap_mah", type=float, default=5000.0,
+              help="Battery capacity in mAh")
+@click.option("--voltage", type=float, default=22.2,
+              help="Battery nominal voltage (V)")
+@click.option("--reserve", type=float, default=20.0,
+              help="Battery reserve percent to keep")
+def mission_check(mission_path: str, zones_kml: str, zones_json: str, max_distance: float,
+                  max_altitude: float, cruise_speed: float, bank_deg: float, cap_mah: float,
+                  voltage: float, reserve: float) -> None:
+    """Safety preflight: distance, altitude, no-fly zones, turns, battery.
+
+    Example:
+      mavplan mission check plan.json --zones-kml airspace.kml
+    """
+    try:
+        mission = Mission.load(mission_path)
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        sys.exit(1)
+
+    zones = []
+    if zones_kml:
+        try:
+            zones += load_zones_from_kml(zones_kml)
+        except ValueError as e:
+            click.echo(f"  Error loading zones KML: {e}", err=True)
+            sys.exit(1)
+    if zones_json:
+        try:
+            zones += load_zones_json(zones_json)
+        except ValueError as e:
+            click.echo(f"  Error loading zones JSON: {e}", err=True)
+            sys.exit(1)
+
+    params = PreflightParams(
+        max_distance_m=max_distance,
+        max_altitude_m=max_altitude,
+        cruise_speed=cruise_speed,
+        bank_deg=bank_deg,
+        battery=BatteryModel(capacity_mah=cap_mah, voltage=voltage),
+        reserve_percent=reserve,
+    )
+    items = preflight_check(mission, zones, params)
+    summary = preflight_summary(items)
+
+    wps = mission.waypoints()
+    click.echo(f"  Mission: {mission_path} ({len(wps)} waypoints, {len(zones)} no-fly zones)")
+    if not items:
+        click.echo("  All safety checks passed.")
+    else:
+        for it in items:
+            level = it["level"].upper()
+            if it.get("waypoint") is not None:
+                click.echo(f"    [{level}] WP{it['waypoint']}: {it['message']}")
+            else:
+                click.echo(f"    [{level}] {it['message']}")
+        click.echo(
+            f"  Summary: {summary['errors']} error(s), "
+            f"{summary['warnings']} warning(s), {summary['info']} info"
+        )
 
 
 # ------------------------------------------------------------------
@@ -911,6 +997,19 @@ def task_grade(task_path: str, flight_csv: str, plan_path: str, student: str, ou
             sys.exit(1)
 
     result = grade_flight(spec, flight, plan=plan, student=student)
+
+    # v1.4: run the safety preflight on the reference plan and merge the
+    # structured warnings into the score report so trainees see the whole
+    # brief (mission + airspace + limits) on one page.
+    preflight_items = None
+    if plan is not None:
+        pre_params = PreflightParams(
+            max_distance_m=spec.max_distance_m,
+            max_altitude_m=spec.altitude_range[1],
+            cruise_speed=float(spec.speed_range[1]),
+        )
+        preflight_items = preflight_check(plan, spec.no_fly_zones, pre_params)
+
     click.echo(f"  Student : {result.student}")
     click.echo(f"  Task    : {result.task_name}")
     click.echo(f"  Score   : {result.score:.1f} / 100  ({result.level})")
@@ -921,9 +1020,16 @@ def task_grade(task_path: str, flight_csv: str, plan_path: str, student: str, ou
             click.echo(f"    - {d.message}")
     else:
         click.echo("  Deductions: none")
+    if plan is not None:
+        summary = preflight_summary(preflight_items or [])
+        click.echo(
+            f"  Preflight: {summary['errors']} error(s), "
+            f"{summary['warnings']} warning(s) (merged into report)"
+        )
 
     if out:
-        render_report(spec, result, flight, plan=plan, output_path=out)
+        render_report(spec, result, flight, plan=plan, output_path=out,
+                      preflight_items=preflight_items)
         click.echo(f"  Report -> {out}")
 
 
@@ -1151,6 +1257,43 @@ def sim_with_tol(mission_path, output) -> None:
     if output:
         new_mission.save(output)
         click.echo(f"  Saved to {output}")
+
+
+@simulate.command(name="lost-link")
+@click.argument("mission_path", type=click.Path(exists=True))
+@click.option("--lost-at", "lost_at", type=float, default=60.0,
+              help="Link lost N seconds after takeoff")
+@click.option("--fail-safe", type=click.Choice(["rtl", "hold", "continue"]),
+              default="rtl", help="Fail-safe policy demonstrated")
+@click.option("--rtl-speed", "rtl_speed", type=float, default=10.0,
+              help="Cruise speed used on the return leg (m/s)")
+@click.option("--rtl-alt", "rtl_alt", type=float, default=80.0,
+              help="Cruise altitude for the return leg (m)")
+@click.option("--capacity", "cap_mah", type=float, default=5000.0,
+              help="Battery capacity in mAh")
+@click.option("--voltage", type=float, default=22.2,
+              help="Battery nominal voltage (V)")
+@click.option("--reserve", type=float, default=20.0,
+              help="Battery reserve percent to keep")
+def sim_lost_link(mission_path: str, lost_at: float, fail_safe: str, rtl_speed: float,
+                  rtl_alt: float, cap_mah: float, voltage: float, reserve: float) -> None:
+    """BVLOS teaching demo: link loss triggers the fail-safe decision chain.
+
+    Example:
+      mavplan simulate lost-link plan.json --lost-at 90 --fail-safe rtl
+    """
+    try:
+        mission = Mission.load(mission_path)
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        sys.exit(1)
+
+    battery = BatteryModel(capacity_mah=cap_mah, voltage=voltage)
+    params = SimulationParams(battery=battery, reserve_percent=reserve)
+    link = LostLinkParams(lost_at_s=lost_at, rtl_speed_ms=rtl_speed,
+                          rtl_altitude_m=rtl_alt, fail_safe=fail_safe)
+    events = simulate_lost_link(mission, params, link)
+    click.echo(format_lost_link_events(events))
 
 
 # ------------------------------------------------------------------

@@ -28,6 +28,7 @@ def render_report(
     flight: FlightLog,
     plan: Optional[Mission] = None,
     output_path: str = "",
+    preflight_items: Optional[list] = None,
 ) -> str:
     """Render the score report HTML string (and write it when output_path set).
 
@@ -115,6 +116,28 @@ def render_report(
     )
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    # ---- preflight (v1.4 safety section) --------------------------------
+    preflight_html = ""
+    if preflight_items is not None:
+        if preflight_items:
+            rows = "".join(
+                f"<tr><td>{e(it.get('code', ''))}</td>"
+                f"<td>{'错误' if it.get('level') == 'error' else ('警告' if it.get('level') == 'warning' else '提示')}</td>"
+                f"<td>{e(str(it.get('waypoint', '')))}</td>"
+                f"<td>{e(it.get('message', ''))}</td></tr>"
+                for it in preflight_items
+            )
+            preflight_html = (
+                "<h3>飞行前安全预检（v1.4）</h3>"
+                "<table><thead><tr><th>代码</th><th>级别</th><th>航点</th><th>说明</th></tr></thead>"
+                f"<tbody>{rows}</tbody></table>"
+            )
+        else:
+            preflight_html = (
+                "<h3>飞行前安全预检（v1.4）</h3>"
+                "<p class=\"clean\">预检全部通过，无安全告警。</p>"
+            )
+
     html_doc = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -184,6 +207,7 @@ def render_report(
 
     {deduction_html}
     {compare_html}
+    {preflight_html}
 
     <h3>评语</h3>
     <div class="comment">{e(result.comment)}</div>

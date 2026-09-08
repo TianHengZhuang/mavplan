@@ -1,0 +1,76 @@
+{
+  "name": "v1.4 \u9884\u68c0\u6f14\u793a-\u5e38\u89c4\u822a\u7ebf",
+  "frame": 3,
+  "waypoints": [
+    {
+      "seq": 0,
+      "lat": 31.2,
+      "lon": 121.4,
+      "alt": 50.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 1,
+      "lat": 31.2007,
+      "lon": 121.4006,
+      "alt": 90.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 2,
+      "lat": 31.2015,
+      "lon": 121.4,
+      "alt": 80.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 3,
+      "lat": 31.2009,
+      "lon": 121.3994,
+      "alt": 70.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 4,
+      "lat": 31.2,
+      "lon": 121.4,
+      "alt": 50.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    }
+  ]
+}

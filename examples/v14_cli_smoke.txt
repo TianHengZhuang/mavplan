@@ -1,0 +1,60 @@
+
+======================================================================
+$ 预检通过（常规航线 + 无冲突禁飞区）
+======================================================================
+  Mission: examples/v14_demo_plan.json (5 waypoints, 2 no-fly zones)
+  All safety checks passed.
+[exit 0]
+
+======================================================================
+$ 预检告警（航线穿过高压线塔禁飞圆）
+======================================================================
+  Mission: examples/v14_demo_plan.json (5 waypoints, 2 no-fly zones)
+    [ERROR] 航段 WP1-WP2 进入禁飞区「高压线塔」(圆(半径35m))
+  Summary: 1 error(s), 0 warning(s), 0 info
+[exit 0]
+
+======================================================================
+$ 链路丢失教学演示（RTL 自动返航）
+======================================================================
+ 1. [t=  30.0s] [link_lost] 起飞后 30 s 遥控/数传链路丢失（当前位于 WP0-WP1 航段，约 31.202400, 121.401440，高度 79 m）
+ 2. [t=  35.0s] [policy] 执行 Fail-safe 策略：自动返航 (RTL) —— 按民航/行业安全建议，链路丢失超时后应自动返航并降落
+ 3. [t=  35.0s] [rtl_route] 直飞返航点（起降点，31.200000, 121.400000）距离约 0.30 km
+ 4. [t=  35.0s] [rtl_estimate] 预计返航耗时约 0.5 min（返航速度 10 m/s，需先爬升至 80 m（爬升 1 m））
+ 5. [t=  35.0s] [battery] 电量评估：返航估算需 10 Wh，剩余可用约 93 Wh，电量充足可完成返航
+ 6. [t=  40.0s] [teaching] 教学提示：若链路持续丢失 RTL 策略将接管；若选择继续执行原任务，剩余航线约 0.51 km，而直接返航仅需 0.30 km —— 超视距飞行时务必先想好“丢了怎么办”再起飞。
+[exit 0]
+
+======================================================================
+$ 出题（medium seed 42）
+======================================================================
+  Generated task -> C:\Users\融一\AppData\Local\Temp\mavplan_v14_smoke\v14_task.json
+  Task: 航线规划考核·中级·seed 42
+  Difficulty: medium  |  Home: 31.202231,121.392400 alt 0m
+  Description: 从起飞点完成起飞，按自选顺序飞越全部必过航点，覆盖指定作业区域后返回降落。巡航高度须保持在 50~85m，速度 7~13m/s，全程 11 分钟内完成、航程不超过 5.1km。航线不得进入禁飞区。
+    - required point 'A': 31.201525,121.397596 radius 20m
+    - required point 'B': 31.210285,121.390827 radius 20m
+    - required point 'C': 31.201310,121.388576 radius 20m
+    - required point 'D': 31.199299,121.392213 radius 20m
+    - required area '区域1': 31.208880,121.393952 radius 80m
+  Altitude window: 50-85 m
+  Speed window:    7-13 m/s
+  Time limit:      668 s
+  Distance limit:  5148 m
+    - no-fly zone '禁飞区1': 31.196489,121.387516 radius 39m
+  Gold reference route -> C:\Users\融一\AppData\Local\Temp\mavplan_v14_smoke\v14_gold.json (7 waypoints, 3.59 km)
+[exit 0]
+
+======================================================================
+$ 判分报告（预检段落并入 v1.3 成绩报告）
+======================================================================
+  Student : 演示学员
+  Task    : 航线规划考核·中级·seed 42
+  Score   : 100.0 / 100  (优秀)
+  Passed  : 是
+  Deductions: none
+  Preflight: 0 error(s), 0 warning(s) (merged into report)
+  Report -> C:\Users\融一\.qclaw\workspace\mavplan\examples\v14_report_safety.html
+[exit 0]
+
+[report] C:\Users\融一\.qclaw\workspace\mavplan\examples\v14_report_safety.html

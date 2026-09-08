@@ -367,3 +367,169 @@ def generate_report(mission: Mission, params: SimulationParams) -> str:
 
     lines.append("=" * 50)
     return "\n".join(lines)
+
+
+# ------------------------------------------------------------------
+# Lost-link / fail-safe teaching demo (v1.4)
+# ------------------------------------------------------------------
+
+@dataclass
+class LostLinkParams:
+    """Configuration for the lost-link fail-safe demonstration.
+
+    Attributes:
+        lost_at_s: Link lost N seconds after takeoff (from waypoint 0).
+        rtl_speed_ms: Cruise speed used while returning home.
+        rtl_altitude_m: Altitude used for the return leg (climb if lower).
+        fail_safe: Policy executed on lost link: ``"rtl"`` (default,
+            return-to-launch), ``"hold"`` or ``"continue"``.
+    """
+    lost_at_s: float = 60.0
+    rtl_speed_ms: float = 10.0
+    rtl_altitude_m: float = 80.0
+    fail_safe: str = "rtl"
+
+
+def simulate_lost_link(
+    mission: Mission,
+    sim_params: SimulationParams | None = None,
+    link_params: LostLinkParams | None = None,
+) -> list[dict]:
+    """Teaching demo: link loss at a point of the mission -> fail-safe logic.
+
+    The demo walks through the decision process a CAAC BVLOS trainee should
+    internalise: *when does the link drop, where is the aircraft, which
+    fail-safe fires, how far is the return leg and does the battery cover
+    it?* It intentionally narrates each step instead of hiding the logic.
+
+    Returns:
+        List of event dicts (each with ``seq``, ``type``, ``time_s``,
+        optional ``lat``/``lon`` and a Chinese ``message``).
+
+    Battery feasibility for the return leg is a teaching approximation
+    based on the full-mission energy estimate: it subtracts the planned
+    energy already spent before the link loss and checks the direct RTL
+    leg against the leftover capacity. Waypoints are travelled at cruise
+    speed with no hover (hover terms are negligible at this scale).
+    """
+    sim = sim_params or SimulationParams()
+    link = link_params or LostLinkParams()
+    wps = mission.waypoints()
+    events: list[dict] = []
+
+    if len(wps) < 2:
+        return [{"seq": 1, "type": "error", "time_s": 0.0,
+                 "message": "任务航点不足，无法演示链路丢失返航"}]
+
+    eff_speed = sim.cruise_speed * sim.wind.speed_factor()
+    total_time = mission.estimated_duration(hover_time=0.0)
+    if eff_speed > 0:
+        total_time = total_time * (sim.cruise_speed / eff_speed)
+    t_lost = min(max(link.lost_at_s, 0.0), total_time)
+
+    # ---- where is the aircraft at t_lost? ------------------------------
+    seg_idx = 0
+    acc = 0.0
+    frac = 0.0
+    for i in range(len(wps) - 1):
+        leg = wps[i].distance_to(wps[i + 1])
+        leg_t = leg / eff_speed if eff_speed > 0 else 0.0
+        if acc + leg_t >= t_lost:
+            frac = (t_lost - acc) / leg_t if leg_t > 0 else 0.0
+            seg_idx = i
+            break
+        acc += leg_t
+        seg_idx = i + 1
+        frac = 0.0
+    a = wps[seg_idx]
+    b = wps[min(seg_idx + 1, len(wps) - 1)]
+    lat = a.lat + (b.lat - a.lat) * frac
+    lon = a.lon + (b.lon - a.lon) * frac
+    alt = a.alt + (b.alt - a.alt) * frac
+
+    seq = 0
+    seq += 1
+    events.append({"seq": seq, "type": "link_lost", "time_s": round(t_lost, 1),
+                   "lat": lat, "lon": lon, "alt_m": round(alt, 1),
+                   "message": (
+                       f"起飞后 {t_lost:.0f} s 遥控/数传链路丢失（当前位于 WP{a.seq}-WP{b.seq} "
+                       f"航段，约 {lat:.6f}, {lon:.6f}，高度 {alt:.0f} m）"
+                   )})
+
+    # remaining planned route length if the mission were to continue
+    remaining = 0.0
+    if seg_idx < len(wps) - 1:
+        remaining += _haversine(lat, lon, wps[seg_idx + 1].lat, wps[seg_idx + 1].lon)
+        for i in range(seg_idx + 1, len(wps) - 1):
+            remaining += wps[i].distance_to(wps[i + 1])
+
+    home = wps[0]
+    rtl_dist = _haversine(lat, lon, home.lat, home.lon)
+
+    seq += 1
+    policy_txt = {
+        "rtl": "自动返航 (RTL) —— 按民航/行业安全建议，链路丢失超时后应自动返航并降落",
+        "hold": "原地悬停等待 (Hold) —— 若空域安全且电量充足可原地等待链路恢复",
+        "continue": "继续执行任务 (Continue) —— 教学仅演示用途，不推荐作为生产 fail-safe",
+    }.get(link.fail_safe, "自动返航 (RTL)")
+    events.append({"seq": seq, "type": "policy", "time_s": round(t_lost + 5.0, 1),
+                   "message": f"执行 Fail-safe 策略：{policy_txt}"})
+
+    if link.fail_safe == "rtl":
+        seq += 1
+        events.append({"seq": seq, "type": "rtl_route", "time_s": round(t_lost + 5.0, 1),
+                       "distance_m": round(rtl_dist, 1),
+                       "message": (
+                           f"直飞返航点（起降点，{home.lat:.6f}, {home.lon:.6f}）距离约 "
+                           f"{rtl_dist/1000:.2f} km"
+                       )})
+        seq += 1
+        need_climb = max(0.0, link.rtl_altitude_m - alt)
+        climb_txt = f"，需先爬升至 {link.rtl_altitude_m:.0f} m（爬升 {need_climb:.0f} m）" \
+            if need_climb > 0 else ""
+        rtl_time = rtl_dist / max(link.rtl_speed_ms, 1e-9)
+        events.append({"seq": seq, "type": "rtl_estimate", "time_s": round(t_lost + 5.0, 1),
+                       "message": (
+                           f"预计返航耗时约 {rtl_time/60:.1f} min（返航速度 "
+                           f"{link.rtl_speed_ms:.0f} m/s{climb_txt}）"
+                       )})
+
+        # battery feasibility of the RTL leg (teaching approximation)
+        full = estimate_energy(mission, sim)
+        remaining_wh = sim.battery.capacity_wh * (1.0 - full.battery_used_percent / 100.0)
+        rtl_wh = (sim.battery.cruise_power_w * (rtl_dist / max(link.rtl_speed_ms, 1e-9))
+                  + sim.battery.hover_power_w * (link.rtl_altitude_m / max(sim.landing_speed, 1e-9))) / 3600.0
+        if rtl_wh > remaining_wh:
+            seq += 1
+            events.append({"seq": seq, "type": "battery", "time_s": round(t_lost + 5.0, 1),
+                           "message": (
+                               f"[电量风险] 返航估算需 {rtl_wh:.0f} Wh，剩余可用约 "
+                               f"{remaining_wh:.0f} Wh（已扣 {sim.reserve_percent:.0f}% 余量），"
+                               f"不足以完成返航 —— 起飞前应复核电池余量"
+                           )})
+        else:
+            seq += 1
+            events.append({"seq": seq, "type": "battery", "time_s": round(t_lost + 5.0, 1),
+                           "message": (
+                               f"电量评估：返航估算需 {rtl_wh:.0f} Wh，剩余可用约 "
+                               f"{remaining_wh:.0f} Wh，电量充足可完成返航"
+                           )})
+
+    seq += 1
+    events.append({"seq": seq, "type": "teaching", "time_s": round(t_lost + 10.0, 1),
+                   "message": (
+                       f"教学提示：若链路持续丢失 {link.fail_safe.upper()} 策略将接管；"
+                       f"若选择继续执行原任务，剩余航线约 {remaining/1000:.2f} km，"
+                       f"而直接返航仅需 {rtl_dist/1000:.2f} km —— 超视距飞行时务必先想好"
+                       f"“丢了怎么办”再起飞。"
+                   )})
+    return events
+
+
+def format_lost_link_events(events: list[dict]) -> str:
+    """Render lost-link demo events as human-readable text for the CLI."""
+    lines = []
+    for ev in events:
+        time_txt = f"[t={ev['time_s']:>6.1f}s]" if ev.get("time_s") is not None else "[--]"
+        lines.append(f"{ev['seq']:>2}. {time_txt} [{ev['type']}] {ev['message']}")
+    return "\n".join(lines)

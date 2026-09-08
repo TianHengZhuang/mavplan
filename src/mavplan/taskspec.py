@@ -10,8 +10,9 @@ Module also carries the small geometry helpers used by the grading engine
 local ENU projection so no geospatial dependency is needed.
 
 Design notes:
-  - No-fly zones are circles for v1.3 (polygon model lands in v1.4);
-    the ``kind`` field keeps the door open for future extension.
+  - No-fly zones support circles and polygons (v1.4). A polygon zone is
+    a list of WGS84 vertices in lat/lon order (open ring; the ring is
+    closed implicitly); a circle zone keeps lat/lon/radius_m.
   - Every coordinate is WGS84 lat/lon; radii and limits are metres.
 """
 from __future__ import annotations
@@ -81,33 +82,213 @@ def segment_intersects_circle(
     return math.hypot(px, py) < radius_m
 
 
+# ------------------------------------------------------------------
+# Polygon helpers (v1.4): strict-entry semantics, ENU projection.
+#
+# The rules deliberately mirror the circle checks above:
+#   - a point exactly on the polygon boundary is NOT "inside"
+#   - a segment that only touches the boundary (tangent at a vertex or
+#     along an edge) is NOT counted as entering
+#   - entering means crossing an edge into the interior, or starting
+#     strictly inside the ring
+# ------------------------------------------------------------------
+
+def _ring_local(vertices: list, ref_lat: float, ref_lon: float) -> list[tuple[float, float]]:
+    """Project an open-ring polygon to local (x, y) metres."""
+    return [
+        _to_local_xy(v[0], v[1], ref_lat, ref_lon)
+        for v in vertices
+    ]
+
+
+def _point_on_segment(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> bool:
+    """True when point p lies exactly on segment ab (collinear + within box)."""
+    cross = (px - ax) * (by - ay) - (py - ay) * (bx - ax)
+    if abs(cross) > 1e-9:
+        return False
+    return min(ax, bx) - 1e-9 <= px <= max(ax, bx) + 1e-9 and \
+        min(ay, by) - 1e-9 <= py <= max(ay, by) + 1e-9
+
+
+def _proper_segment_intersect(
+    ax: float, ay: float, bx: float, by: float,
+    cx: float, cy: float, dx: float, dy: float,
+) -> bool:
+    """True when segments ab and cd cross properly (not merely touching)."""
+    def orient(p1, p2, p3) -> float:
+        return (p2[0] - p1[0]) * (p3[1] - p1[1]) - (p2[1] - p1[1]) * (p3[0] - p1[0])
+    o1 = orient((ax, ay), (bx, by), (cx, cy))
+    o2 = orient((ax, ay), (bx, by), (dx, dy))
+    o3 = orient((cx, cy), (dx, dy), (ax, ay))
+    o4 = orient((cx, cy), (dx, dy), (bx, by))
+    return o1 * o2 < 0 and o3 * o4 < 0
+
+
+def point_in_polygon(lat: float, lon: float, vertices: list) -> bool:
+    """True when (lat, lon) lies strictly inside the polygon.
+
+    Boundary points (exactly on an edge/vertex) return False, matching the
+    circle helper where a tangent contact is not an entry.
+    """
+    if len(vertices) < 3:
+        return False
+    ref_lat, ref_lon = vertices[0][0], vertices[0][1]
+    px, py = _to_local_xy(lat, lon, ref_lat, ref_lon)
+    ring = _ring_local(vertices, ref_lat, ref_lon)
+    n = len(ring)
+
+    for i in range(n):
+        ax, ay = ring[i]
+        bx, by = ring[(i + 1) % n]
+        if _point_on_segment(px, py, ax, ay, bx, by):
+            return False
+
+    inside = False
+    for i in range(n):
+        ax, ay = ring[i]
+        bx, by = ring[(i + 1) % n]
+        if ((ay > py) != (by > py)) and \
+                px < (bx - ax) * (py - ay) / (by - ay) + ax:
+            inside = not inside
+    return inside
+
+
+def segment_intersects_polygon(
+    lat1: float, lon1: float, lat2: float, lon2: float, vertices: list,
+) -> bool:
+    """True when the segment p1-p2 enters the polygon interior.
+
+    Pure tangency (touching a vertex/edge without crossing, or ending on
+    the boundary) returns False — consistent with circle semantics where a
+    tangent path does not count as entering the zone.
+    """
+    if len(vertices) < 3:
+        return False
+    ref_lat, ref_lon = vertices[0][0], vertices[0][1]
+    ax, ay = _to_local_xy(lat1, lon1, ref_lat, ref_lon)
+    bx, by = _to_local_xy(lat2, lon2, ref_lat, ref_lon)
+    ring = _ring_local(vertices, ref_lat, ref_lon)
+    n = len(ring)
+
+    # Either endpoint strictly inside -> route touches the interior.
+    for p in ((ax, ay), (bx, by)):
+        hits = 0
+        boundary = False
+        for i in range(n):
+            vx, vy = ring[i]
+            wx, wy = ring[(i + 1) % n]
+            if _point_on_segment(p[0], p[1], vx, vy, wx, wy):
+                boundary = True
+                break
+            if ((vy > p[1]) != (wy > p[1])) and \
+                    p[0] < (wx - vx) * (p[1] - vy) / (wy - vy) + vx:
+                hits += 1
+        if not boundary and hits % 2 == 1:
+            return True
+
+    # Proper edge crossings: route cuts through the boundary.
+    for i in range(n):
+        cx, cy = ring[i]
+        dx, dy = ring[(i + 1) % n]
+        if _proper_segment_intersect(ax, ay, bx, by, cx, cy, dx, dy):
+            return True
+    return False
+
+
 @dataclass
 class Zone:
-    """A no-fly zone (v1.3: circle; ``kind`` reserved for polygon in v1.4)."""
+    """A no-fly zone.
+
+    Two shapes are supported (``kind`` field):
+
+    - ``"circle"``: centre at (lat, lon), protected radius ``radius_m``.
+    - ``"polygon"``: irregular area defined by ``vertices`` — an open ring
+      of (lat, lon) pairs, closed implicitly. ``lat``/``lon`` mirror the
+      first vertex so legacy circle-oriented code keeps a valid anchor.
+
+    Coordinates are WGS84 lat/lon; radii are metres.
+    """
     name: str
     lat: float
     lon: float
     radius_m: float = 50.0
-    kind: str = "circle"
+    kind: str = "circle"  # "circle" | "polygon"
+    vertices: list = field(default_factory=list)  # [(lat, lon), ...] for polygon
+
+    # ------------------------------------------------------------------
+    def polygon_ring(self) -> list[tuple[float, float]]:
+        """Normalised open-ring vertices (dedup a closing duplicate).
+
+        Returns an empty list for circle zones.
+        """
+        if self.kind != "polygon":
+            return []
+        ring = [(float(v[0]), float(v[1])) for v in self.vertices]
+        if len(ring) >= 2 and ring[0] == ring[-1]:
+            ring = ring[:-1]
+        return ring
+
+    def shape_label(self) -> str:
+        if self.kind == "polygon":
+            return f"多边形({len(self.polygon_ring())} 顶点)"
+        return f"圆(半径{self.radius_m:.0f}m)"
+
+    def validate(self) -> list[str]:
+        """Return list of validation errors (empty when valid)."""
+        errors: list[str] = []
+        if self.kind == "polygon":
+            ring = self.polygon_ring()
+            if len(ring) < 3:
+                errors.append(f"禁飞区「{self.name}」多边形至少需要 3 个顶点")
+            for v in ring:
+                if not -90 <= v[0] <= 90 or not -180 <= v[1] <= 180:
+                    errors.append(f"禁飞区「{self.name}」多边形顶点坐标非法: {v}")
+        else:
+            if self.radius_m <= 0:
+                errors.append(f"禁飞区「{self.name}」半径必须大于 0")
+            if not -90 <= self.lat <= 90 or not -180 <= self.lon <= 180:
+                errors.append(f"禁飞区「{self.name}」坐标非法")
+        return errors
 
     def to_dict(self) -> dict:
+        if self.kind == "polygon":
+            ring = self.polygon_ring()
+            if ring:
+                self.lat = round(ring[0][0], 7)
+                self.lon = round(ring[0][1], 7)
+            return {
+                "name": self.name,
+                "kind": self.kind,
+                "lat": round(self.lat, 7),
+                "lon": round(self.lon, 7),
+                "radius_m": round(self.radius_m, 1),
+                "vertices": [[round(v[0], 7), round(v[1], 7)] for v in ring],
+            }
         return {
             "name": self.name,
+            "kind": self.kind,
             "lat": round(self.lat, 7),
             "lon": round(self.lon, 7),
             "radius_m": round(self.radius_m, 1),
-            "kind": self.kind,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> Zone:
-        return cls(
+        kind = str(data.get("kind", "circle"))
+        zone = cls(
             name=str(data.get("name", "禁飞区")),
             lat=float(data["lat"]),
             lon=float(data["lon"]),
             radius_m=float(data.get("radius_m", 50.0)),
-            kind=str(data.get("kind", "circle")),
+            kind=kind,
         )
+        if kind == "polygon":
+            zone.vertices = [(float(v[0]), float(v[1])) for v in data.get("vertices", [])]
+            ring = zone.polygon_ring()
+            if ring:
+                zone.lat = ring[0][0]
+                zone.lon = ring[0][1]
+        return zone
 
 
 @dataclass
@@ -199,8 +380,7 @@ class TaskSpec:
         if self.max_distance_m <= 0:
             errors.append("距离限制必须大于 0")
         for z in self.no_fly_zones:
-            if z.radius_m <= 0:
-                errors.append(f"禁飞区「{z.name}」半径必须大于 0")
+            errors.extend(z.validate())
         return errors
 
     def to_dict(self) -> dict:

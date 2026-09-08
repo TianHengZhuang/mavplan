@@ -1,0 +1,62 @@
+{
+  "name": "v1.4 \u94fe\u8def\u4e22\u5931\u8fd4\u822a\u6f14\u793a",
+  "frame": 3,
+  "waypoints": [
+    {
+      "seq": 0,
+      "lat": 31.2,
+      "lon": 121.4,
+      "alt": 50.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 1,
+      "lat": 31.2025,
+      "lon": 121.4015,
+      "alt": 80.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 2,
+      "lat": 31.2035,
+      "lon": 121.3995,
+      "alt": 70.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    },
+    {
+      "seq": 3,
+      "lat": 31.201,
+      "lon": 121.4,
+      "alt": 60.0,
+      "speed": 10.0,
+      "delay": 0.0,
+      "yaw": -9999.0,
+      "acceptance_radius": 2.0,
+      "orbit": 0.0,
+      "command": 16,
+      "frame": 3,
+      "autocontinue": 1
+    }
+  ]
+}

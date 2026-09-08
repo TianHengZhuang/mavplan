@@ -7,14 +7,16 @@ from pathlib import Path
 from typing import Optional
 
 from .waypoint import Waypoint
+from .actions import command_id, DO_SET_CAM_TRIGG_DIST, DO_SET_CAM_TRIGG_INTERVAL
 
 
 class Mission:
     """A collection of waypoints forming a drone mission."""
 
-    def __init__(self, name: str = "Untitled Mission", frame: int = 3):
+    def __init__(self, name: str = "Untitled Mission", frame: int = 3, home: Optional[tuple] = None):
         self.name = name
         self.frame = frame  # MAV_FRAME: 0=global, 3=global relative alt
+        self.home = home  # Optional (lat, lon, alt) home position
         self._waypoints: list[Waypoint] = []
 
     def add_waypoint(self, **kwargs) -> Waypoint:
@@ -29,6 +31,88 @@ class Mission:
         wp.frame = self.frame
         self._waypoints.append(wp)
         return wp
+
+    def insert_waypoint(self, index: int, **kwargs) -> Waypoint:
+        """Insert a waypoint at ``index``, renumbering all following items.
+
+        Kwargs are passed to Waypoint().  Example::
+
+            mission.insert_waypoint(1, lat=31.23, lon=121.47, alt=50)
+        """
+        wp = Waypoint(**kwargs)
+        self._waypoints.insert(index, wp)
+        for i, existing in enumerate(self._waypoints):
+            existing.seq = i
+        return wp
+
+    def add_action(
+        self,
+        after_seq: int,
+        command: int | str,
+        param1: float = 0.0,
+        param2: float = 0.0,
+        param3: float = 0.0,
+        param4: float = 0.0,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
+        alt: Optional[float] = None,
+    ) -> Waypoint:
+        """Insert a DO_* action item right after ``after_seq``.
+
+        When lat/lon/alt are omitted the action inherits the position of the
+        waypoint at ``after_seq`` (MAVLink convention: DO_* items usually
+        repeat the preceding navigation point coordinates).
+        """
+        cmd = command_id(command)
+        if cmd is None:
+            raise ValueError(f"Unknown MAV_CMD: {command!r}")
+        ref = self._waypoints[after_seq]
+        wp = self.insert_waypoint(
+            after_seq + 1,
+            lat=ref.lat if lat is None else lat,
+            lon=ref.lon if lon is None else lon,
+            alt=ref.alt if alt is None else alt,
+            command=cmd,
+            frame=ref.frame,
+        )
+        wp.delay = param1
+        wp.acceptance_radius = param2
+        wp.orbit = param3
+        wp.yaw = param4
+        return wp
+
+    def add_camera_trigger(
+        self,
+        mode: str = "distance",
+        value: float = 25.0,
+        after_seq: int = 0,
+    ) -> Waypoint:
+        """Insert a camera-trigger DO_* action right after ``after_seq``.
+
+        ``mode="distance"`` inserts DO_SET_CAM_TRIGG_DIST (trigger every
+        ``value`` metres of travel); ``mode="time"`` inserts
+        DO_SET_CAM_TRIGG_INTERVAL (trigger every ``value`` seconds).
+        The action inherits the position of waypoint ``after_seq``.
+        """
+        if mode == "distance":
+            return self.add_action(
+                after_seq, DO_SET_CAM_TRIGG_DIST, param1=float(value)
+            )
+        if mode == "time":
+            return self.add_action(
+                after_seq, DO_SET_CAM_TRIGG_INTERVAL, param1=float(value)
+            )
+        raise ValueError("mode must be 'distance' or 'time'")
+
+    def remove_waypoint(self, seq: int) -> None:
+        """Remove the waypoint with the given sequence number."""
+        for i, wp in enumerate(self._waypoints):
+            if wp.seq == seq:
+                del self._waypoints[i]
+                for j, remaining in enumerate(self._waypoints):
+                    remaining.seq = j
+                return
+        raise IndexError(f"No waypoint with seq {seq}")
 
     def waypoints(self) -> list[Waypoint]:
         return list(self._waypoints)
@@ -95,15 +179,20 @@ class Mission:
         return cruise_time + hover + delays
 
     def to_dict(self) -> dict:
-        return {
+        data: dict = {
             "name": self.name,
             "frame": self.frame,
-            "waypoints": [wp.to_dict() for wp in self._waypoints],
         }
+        if self.home is not None:
+            data["home"] = list(self.home)
+        data["waypoints"] = [wp.to_dict() for wp in self._waypoints]
+        return data
 
     @classmethod
     def from_dict(cls, data: dict) -> Mission:
         mission = cls(name=data.get("name", "Untitled"), frame=data.get("frame", 3))
+        if data.get("home") is not None:
+            mission.home = tuple(data["home"])
         for wp_data in data.get("waypoints", []):
             mission.add_waypoint(**Waypoint.from_dict(wp_data).to_dict())
         return mission

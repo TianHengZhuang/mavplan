@@ -12,7 +12,8 @@ Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 - **MAVLink connection** (v0.4): Upload missions to autopilot, download from autopilot
 - **KML import + templates** (v0.5): Import KML files as missions, use built-in templates
 - **Mission simulation** (v0.6): Battery estimation, wind effects, geofence check, safety validation
-- **Export**: MAVLink waypoint file, KML (Google Earth), CSV
+- **Interop + actions** (v1.1): Import/export QGC `.plan` & WPL (Mission Planner/QGC), MAV_CMD DO_* action items, camera-trigger insertion
+- **Export**: MAVLink waypoint file, QGC `.plan`, WPL, KML (Google Earth), CSV
 
 ## Install
 
@@ -105,6 +106,16 @@ conn.close()
 ```
 
 ## Changelog
+
+### v1.1.0 (2026-09-08)
+- **Interop layer**: two-way mission file conversion with real-world ground stations
+- QGroundControl/Mission Planner **WPL import**: `parse_wpl()` + `mavplan mission import <file>` auto-detects WPL / `.plan` / native JSON; leading HOME item becomes `mission.home`
+- **QGC `.plan` export/import**: `to_qgc_plan()` / `parse_qgc_plan()` / `save_qgc_plan()` + `mavplan export plan`; geo-fence & rally sections carried through (empty on export)
+- **Mission home position**: `Mission(home=(lat, lon, alt))`, persisted in native JSON
+- **MAV_CMD action layer**: `mavplan.actions` constants + `command_id()`/`command_name()`/`is_action()`; `Mission.add_action()`, `Mission.add_camera_trigger()`
+- New CLI: `mavplan waypoint action <seq> --command DO_X` (insert DO_* item after a waypoint), `mavplan mission camera --mode distance|time --value N` (photo every N m / N s), `mavplan export wpl`
+- `waypoint list` now tags non-navigation items, e.g. `[DO_SET_CAM_TRIGG_DIST]`
+- Test suite: 138 tests (100% passing), zero new runtime dependencies
 
 ### v1.0.0 (2026-09-08)
 - **Stable release**: full feature set (mission planning, patterns, log analysis, MAVLink link, KML/templates, simulation) with a stable public API

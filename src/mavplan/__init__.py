@@ -1,6 +1,29 @@
 """mavplan — MAVLink mission planner."""
 from .mission import Mission
 from .waypoint import Waypoint
+from .actions import (
+    command_id,
+    command_name,
+    is_action,
+    CMD_NAMES,
+    NAV_WAYPOINT,
+    NAV_TAKEOFF,
+    NAV_LAND,
+    NAV_RETURN_TO_LAUNCH,
+    DO_JUMP,
+    DO_CHANGE_SPEED,
+    DO_SET_CAM_TRIGG_DIST,
+    DO_SET_CAM_TRIGG_INTERVAL,
+)
+from .formats import (
+    sniff_format,
+    load_mission_file,
+    parse_wpl,
+    to_wpl,
+    parse_qgc_plan,
+    to_qgc_plan,
+    save_qgc_plan,
+)
 from .pattern import (
     LawnMowerParams,
     PolygonScanParams,
@@ -48,6 +71,25 @@ from .simulate import (
 __all__ = [
     "Mission",
     "Waypoint",
+    "command_id",
+    "command_name",
+    "is_action",
+    "CMD_NAMES",
+    "NAV_WAYPOINT",
+    "NAV_TAKEOFF",
+    "NAV_LAND",
+    "NAV_RETURN_TO_LAUNCH",
+    "DO_JUMP",
+    "DO_CHANGE_SPEED",
+    "DO_SET_CAM_TRIGG_DIST",
+    "DO_SET_CAM_TRIGG_INTERVAL",
+    "sniff_format",
+    "load_mission_file",
+    "parse_wpl",
+    "to_wpl",
+    "parse_qgc_plan",
+    "to_qgc_plan",
+    "save_qgc_plan",
     "LawnMowerParams",
     "PolygonScanParams",
     "OrbitParams",
@@ -82,4 +124,4 @@ __all__ = [
     "check_geofence",
     "generate_report",
 ]
-__version__ = "1.0.0"
+__version__ = "1.1.0"

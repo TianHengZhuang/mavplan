@@ -9,6 +9,8 @@ import click
 
 from .mission import Mission
 from .waypoint import Waypoint
+from .actions import command_id, command_name
+from .formats import load_mission_file, save_qgc_plan, to_qgc_plan, to_wpl
 from .pattern import (
     LawnMowerParams,
     PolygonScanParams,
@@ -99,6 +101,42 @@ def add(lat: float, lon: float, alt: float, speed: float, delay: float, yaw: flo
         _save_mission(mission)
 
 
+@waypoint.command("action")
+@click.argument("after_seq", type=int)
+@click.option("--command", "-c", required=True, help="MAV_CMD name, e.g. DO_CHANGE_SPEED or do_jump")
+@click.option("--param1", "-p1", type=float, default=0.0, help="param1 for the command")
+@click.option("--param2", "-p2", type=float, default=0.0, help="param2 for the command")
+@click.option("--param3", "-p3", type=float, default=0.0, help="param3 for the command")
+@click.option("--param4", "-p4", type=float, default=0.0, help="param4 for the command")
+@click.option("--save/--no-save", "auto_save", default=True, help="Auto-save mission")
+def insert_action(
+    after_seq: int, command: str, param1: float, param2: float,
+    param3: float, param4: float, auto_save: bool,
+) -> None:
+    """Insert a DO_* action item after WP<after_seq>.
+
+    The action inherits the position of the preceding waypoint. Example::
+
+        mavplan waypoint action 0 --command DO_CHANGE_SPEED --param1 5
+    """
+    mission = _load_mission()
+    if after_seq < 0 or after_seq >= len(mission):
+        click.echo(f"  Error: WP{after_seq} does not exist (have 0-{len(mission)-1})", err=True)
+        sys.exit(1)
+    cmd = command_id(command)
+    if cmd is None:
+        click.echo(f"  Error: unknown MAV_CMD '{command}'", err=True)
+        sys.exit(1)
+    act = mission.add_action(
+        after_seq, cmd, param1=param1, param2=param2, param3=param3, param4=param4
+    )
+    click.echo(
+        f"  Inserted {command_name(act.command)} after WP{after_seq} (now WP{act.seq})"
+    )
+    if auto_save:
+        _save_mission(mission)
+
+
 @waypoint.command()
 def list() -> None:
     """List all waypoints in the current mission."""
@@ -110,10 +148,11 @@ def list() -> None:
     click.echo("")
     for wp in mission.waypoints():
         yaw_str = f"yaw={wp.yaw:.0f}" if wp.yaw != -9999 else "yaw=N/A"
+        suffix = f" [{command_name(wp.command)}]" if wp.command != 16 else ""
         click.echo(
             f"  WP{wp.seq}: lat={wp.lat:.7f} lon={wp.lon:.7f} "
             f"alt={wp.alt:.1f}m speed={wp.speed:.0f}m/s "
-            f"delay={wp.delay:.0f}s {yaw_str}"
+            f"delay={wp.delay:.0f}s {yaw_str}{suffix}"
         )
 
 
@@ -187,6 +226,19 @@ def load(path: str) -> None:
         sys.exit(1)
 
 
+@mission.command("import")
+@click.argument("path")
+def import_file(path: str) -> None:
+    """Import waypoints from WPL/.plan/.json (format auto-detected)."""
+    try:
+        m = load_mission_file(path)
+    except Exception as e:
+        click.echo(f"  Error importing {path}: {e}", err=True)
+        sys.exit(1)
+    _save_mission(m)
+    home_str = f", home=({m.home[0]:.7f}, {m.home[1]:.7f}, {m.home[2]:.1f})" if m.home else ""
+    click.echo(f"  Imported '{m.name}' ({len(m)} waypoints{home_str})")
+
 @mission.command()
 @click.argument("path")
 def save(path: str) -> None:
@@ -212,6 +264,30 @@ def validate() -> None:
         sys.exit(1)
     else:
         click.echo("  Validation OK")
+
+
+@mission.command("camera")
+@click.option("--mode", type=click.Choice(["distance", "time"]), default="distance",
+              help="Trigger every X metres of travel (distance) or every X seconds (time)")
+@click.option("--value", type=float, required=True, help="Metres (distance) or seconds (time)")
+@click.option("--after", "after_seq", type=int, default=0, help="Insert after this waypoint seq (default 0)")
+@click.option("--save/--no-save", "auto_save", default=True, help="Auto-save mission")
+def camera(mode: str, value: float, after_seq: int, auto_save: bool) -> None:
+    """Insert a camera-trigger action (photo every X m / X s)."""
+    m = _load_mission()
+    if not m.waypoints():
+        click.echo("  Error: mission is empty", err=True)
+        sys.exit(1)
+    if after_seq < 0 or after_seq >= len(m):
+        click.echo(f"  Error: WP{after_seq} does not exist (have 0-{len(m)-1})", err=True)
+        sys.exit(1)
+    act = m.add_camera_trigger(mode, value, after_seq)
+    unit = "m" if mode == "distance" else "s"
+    click.echo(
+        f"  Added {command_name(act.command)} every {value:g}{unit} after WP{after_seq} (now WP{act.seq})"
+    )
+    if auto_save:
+        _save_mission(m)
 
 
 # ------------------------------------------------------------------
@@ -263,6 +339,35 @@ def csv(output: str) -> None:
     _write_output(output, content)
     if output != "-":
         click.echo(f"  Exported CSV to {output}")
+
+
+@export.command()
+@click.option("--output", "-o", type=click.Path(), default="-")
+def plan(output: str) -> None:
+    """Export to QGroundControl .plan (JSON)."""
+    m = _load_mission()
+    if not m.waypoints():
+        click.echo("  Error: mission is empty", err=True)
+        sys.exit(1)
+    if output == "-" or output == "stdout":
+        click.echo(json.dumps(to_qgc_plan(m), indent=2))
+    else:
+        save_qgc_plan(m, output)
+        click.echo(f"  Exported QGC .plan to {output}")
+
+
+@export.command("wpl")
+@click.option("--output", "-o", type=click.Path(), default="-")
+def wpl(output: str) -> None:
+    """Export to QGC WPL text (QGroundControl / Mission Planner)."""
+    m = _load_mission()
+    if not m.waypoints():
+        click.echo("  Error: mission is empty", err=True)
+        sys.exit(1)
+    content = to_wpl(m)
+    _write_output(output, content)
+    if output != "-":
+        click.echo(f"  Exported WPL to {output}")
 
 
 def _write_output(path: str, content: str) -> None:

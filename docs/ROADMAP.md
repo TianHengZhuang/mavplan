@@ -4,35 +4,29 @@
 > 航线规划教学、模拟飞行与考核评估），同时保持通用任务规划器能力。
 > 节奏：快速迭代——每攒一批可交付功能即发一个小版本（semver）。
 
-## 现状盘点（v1.0.0，2026-09-08）
+## 现状盘点（v1.1.0，2026-09-08）
 
-- 任务规划：Waypoint/Mission CRUD、lawnmower/orbit/polygon 自动航迹、起飞/降落自动插入
-- 导入导出：MAVLink(mav)、KML、CSV；KML 导入 + 模板库
+- 任务规划：Waypoint/Mission CRUD、lawnmower/orbit/polygon 自动航迹、起飞/降落自动插入；home 位置持久化
+- 导入导出：MAVLink(mav)、**QGC `.plan` JSON、QGC WPL 110/120（双向）**、KML、CSV；KML 导入 + 模板库；`mission import` 自动探测格式
+- 航点动作：MAV_CMD 常量层（NAV_*/DO_*）、`Mission.add_action()`、`add_camera_trigger()`、CLI `waypoint action` / `mission camera`
 - 分析：飞行日志解析（CSV/JSON）、compare_to_plan（覆盖率/命中率/高度偏差）
 - 仿真：能量估算（BatteryModel）、风扰（WindModel）、围栏检查、HTML 报告
-- 链路：pymavlink 上传下载（可选依赖）；CLI 全覆盖；76 tests / 76% 行覆盖
+- 链路：pymavlink 上传下载（可选依赖）；CLI 全覆盖；138 tests / 100% 通过
 
-**面向培训教学的缺口**：无可视化（教学演示难）、无任务格式互转（与 QGC/MP/考试软件
-迁移不便）、无航点动作（DO_ 命令教学）、无禁飞区/安全预检（安全意识教学）、
+**面向培训教学的缺口**：无可视化（教学演示难）、无禁飞区/安全预检（安全意识教学）、
 无任务书/判分闭环（考核场景空白）、测绘计算（进阶课程空白）。
+（v1.1 遗留：`.plan` geo-fence/rally 段读入不保留、仅导出空结构 → v1.4 补齐）
 
 ## 版本路线图
 
-### v1.1 —— 互操作层：任务格式互转 + 航点动作（第一批）
+### v1.1 —— 互操作层：任务格式互转 + 航点动作 ✅（2026-09-08 完成）
 
-目标：任务文件能在 mavplan ↔ 主流地面站/考试软件间无损流动，航点可携带动作。
+1. **QGC `.plan` 导入/导出** ✅（含 home、mission items、plannedHomePosition；geo-fence/rally 导出空结构）
+2. **Mission Planner `.waypoints` 导入/导出** ✅（`QGC WPL 110/120` 均支持，HOME 项提取为 mission.home）
+3. **航点动作模型** ✅（actions.py 常量 + 名映射、`Mission.add_action()`、CLI `waypoint action`、WPL/.plan 导出映射）
+4. **动作插入助手** ✅（`mission camera --mode distance|time --value N` 插 DO_SET_CAM_TRIGG_DIST/INTERVAL）
 
-1. **QGC `.plan` 导入/导出**（JSON，含 home 位置、mission items、geo-fence、rally points）
-   - 只读文件协议，不引第三方依赖（手写 serializer）
-2. **Mission Planner `.waypoints`（txt）导入/导出**
-   - 支持 `QGC WPL 110` 头格式
-3. **航点动作模型**：DO_JUMP / DO_CHANGE_SPEED / DO_SET_CAM_TRIGG_DIST /
-   DO_SET_SERVO / DO_GRIPPER 等常用 DO_* 命令
-   - Waypoint 扩展 `action` 字段 + CLI `waypoint action` 子命令 + MAVLink 导出映射
-4. **动作插入助手**：`pattern insert-photo`（沿航线按距离/时间插拍照点）——测绘教学基础
-
-验收：round-trip 测试（mavplan → .plan → mavplan 无损）；动作在 mav 导出中编码正确；
-新格式均有 golden-file 测试。
+验收达成：WPL/.plan round-trip 测试（坐标 ±1e-6 级）；动作在 WPL/.plan/MAVLink 中编码一致；138 tests 全绿。
 
 ### v1.2 —— 可视化：任务预览 + 模拟回放（教学演示核心）
 
@@ -92,7 +86,7 @@
 
 | 版本 | 内容 | 预计测试增量 | 依赖风险 |
 |------|------|--------------|----------|
-| v1.1 | 格式互转 + 动作 | +30~40 tests | 无新依赖 |
+| v1.1 ✅ | 格式互转 + 动作 | +62 tests（138 总） | 无新依赖 |
 | v1.2 | 可视化（HTML 自包含） | +15~20 tests | 无（模板字符串） |
 | v1.3 | 教学套件 | +25~35 tests | 无新依赖 |
 | v1.4 | 安全预检 | +15~25 tests | 无新依赖 |
@@ -103,5 +97,9 @@
 
 ## 待办
 
-- [ ] 推 GitHub（等待用户提供 PAT）
-- [ ] v1.1 拆 issue/任务清单
+- [x] 推 GitHub（2026-09-08，TianHengZhuang/mavplan，remote 历史已衔接）
+- [x] v1.1 互操作层（2026-09-08 完成，138 tests）
+- [ ] v1.2 可视化：任务预览 + 回放
+- [ ] v1.3 教学套件
+- [ ] v1.4 安全预检
+- [ ] v1.5 测绘课程化

@@ -50,11 +50,11 @@ class TestWaypoint:
 
     def test_validate_lat_out_of_range(self):
         wp = Waypoint(lat=95.0, lon=121.47, alt=50.0)
-        assert "Latitude 95.0 is out of range" in wp.validate()
+        assert any("Latitude 95.0 is out of range" in e for e in wp.validate())
 
     def test_validate_lon_out_of_range(self):
         wp = Waypoint(lat=31.23, lon=200.0, alt=50.0)
-        assert "Longitude 200.0 is out of range" in wp.validate()
+        assert any("Longitude 200.0 is out of range" in e for e in wp.validate())
 
     def test_validate_alt_unsafe(self):
         wp = Waypoint(lat=31.23, lon=121.47, alt=-5000.0)
@@ -191,9 +191,14 @@ class TestLawnMowerPattern:
             lane_spacing=20.0,
         )
         wps = list(generate_lawnmower(params))
+        # Serpentine: adjacent rows sweep in opposite longitude directions.
+        # Each row is one (start, end) pair; rows are (row0, row1, row2, ...).
         for i in range(0, len(wps) - 1, 2):
-            # Even indices: sweep start, odd: sweep end
-            assert wps[i].lon < wps[i + 1].lon
+            start, end = wps[i], wps[i + 1]
+            if (i // 2) % 2 == 0:
+                assert start.lon < end.lon  # west -> east
+            else:
+                assert start.lon > end.lon  # east -> west
 
     def test_all_waypoints_in_bbox(self):
         params = LawnMowerParams(
@@ -680,5 +685,4 @@ class TestSimulate:
         assert "Mission Simulation Report" in report
         assert "Total distance" in report
         assert "Battery" in report
-
 

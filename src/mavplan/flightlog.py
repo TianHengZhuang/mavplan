@@ -347,12 +347,11 @@ def compare_to_plan(flight: FlightLog, plan: Mission) -> dict:
     hit_radii = [10, 20, 50]  # metres
     hit_counts = {r: 0 for r in hit_radii}
     for pwp in plan_wps:
-        for fp in flight.points:
-            d = pwp.distance_to(fp)
-            for r in hit_radii:
-                if d <= r:
-                    hit_counts[r] += 1
-                    break
+        # Closest the flight actually came to this planned waypoint
+        min_d = min(pwp.distance_to(fp) for fp in flight.points)
+        for r in hit_radii:
+            if min_d <= r:
+                hit_counts[r] += 1
 
     # Altitude deviation: mean absolute altitude error
     alt_errors = []

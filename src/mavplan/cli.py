@@ -87,6 +87,11 @@ def waypoint() -> None:
 @click.option("--save/--no-save", "auto_save", default=True, help="Auto-save mission")
 def add(lat: float, lon: float, alt: float, speed: float, delay: float, yaw: float, auto_save: bool) -> None:
     """Add a waypoint to the mission."""
+    wp = Waypoint(lat=lat, lon=lon, alt=alt, speed=speed, delay=delay, yaw=yaw)
+    errors = wp.validate()
+    if errors:
+        click.echo(f"  Error: {errors[0]}", err=True)
+        sys.exit(1)
     mission = _load_mission()
     wp = mission.add_waypoint(lat=lat, lon=lon, alt=alt, speed=speed, delay=delay, yaw=yaw)
     click.echo(f"  Added WP{wp.seq}: {lat:.7f}, {lon:.7f}, alt={alt:.1f}m")
@@ -941,10 +946,6 @@ main.add_command(generate)
 main.add_command(analyze)
 main.add_command(template)
 main.add_command(link)
-main.add_command(simulate)
-main.add_command(simulate)
-main.add_command(simulate)
-main.add_command(simulate)
 main.add_command(simulate)
 
 

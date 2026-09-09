@@ -67,6 +67,47 @@ from .simulate import (
     check_geofence,
     generate_report,
 )
+from .taskspec import (
+    TaskSpec,
+    Zone,
+    CheckPoint,
+    haversine_m,
+    point_in_circle,
+    segment_intersects_circle,
+    point_in_polygon,
+    segment_intersects_polygon,
+)
+from .grade import (
+    Deduction,
+    GradeResult,
+    grade_flight,
+)
+from .nofly import (
+    PreflightParams,
+    preflight_check,
+    preflight_summary,
+    load_zones_from_kml,
+    load_zones_json,
+)
+from .taskgen import (
+    GeneratedTask,
+    generate_task,
+)
+from .survey import (
+    Camera,
+    camera_for,
+    lane_spacing_m,
+    forward_spacing_m,
+    altitude_for_gsd_m,
+    survey_plan,
+    survey_check,
+    coverage_ratio,
+    format_survey_check_text,
+)
+from .report_html import (
+    render_report,
+    render_survey_report,
+)
 
 __all__ = [
     "Mission",
@@ -123,5 +164,37 @@ __all__ = [
     "insert_takeoff_landing",
     "check_geofence",
     "generate_report",
+    # v1.3 — teaching suite
+    "TaskSpec",
+    "Zone",
+    "CheckPoint",
+    "haversine_m",
+    "point_in_circle",
+    "segment_intersects_circle",
+    "point_in_polygon",
+    "segment_intersects_polygon",
+    "Deduction",
+    "GradeResult",
+    "grade_flight",
+    "GeneratedTask",
+    "generate_task",
+    "render_report",
+    # v1.4 — safety preflight
+    "PreflightParams",
+    "preflight_check",
+    "preflight_summary",
+    "load_zones_from_kml",
+    "load_zones_json",
+    # v1.5 — survey & photogrammetry
+    "Camera",
+    "camera_for",
+    "lane_spacing_m",
+    "forward_spacing_m",
+    "altitude_for_gsd_m",
+    "survey_plan",
+    "survey_check",
+    "coverage_ratio",
+    "format_survey_check_text",
+    "render_survey_report",
 ]
-__version__ = "1.1.0"
+__version__ = "1.5.0"

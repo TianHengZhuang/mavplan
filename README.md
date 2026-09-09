@@ -4,6 +4,16 @@ MAVLink mission planner — define drone waypoints, generate patterns, analyze f
 
 Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 
+## Current release
+
+**v1.5.0** adds a training-oriented workflow on top of mission planning:
+
+- Task generation, automated grading, and self-contained HTML score reports
+- Preflight checks for no-fly zones, range, altitude, turns, and battery margin
+- Survey and photogrammetry calculations for camera field of view, GSD, overlap, lane spacing, and coverage validation
+
+The project currently has 216 passing tests. See the [roadmap](docs/ROADMAP.md) for completed milestones and planned visual mission previews.
+
 ## Features
 
 - **Mission planning** (v0.1): Define waypoints with position, altitude, speed, delay, yaw
@@ -18,10 +28,15 @@ Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 ## Install
 
 ```bash
-pip install mavplan
-# For MAVLink support (upload/download to real autopilot):
-pip install mavplan[mavlink]
+git clone https://github.com/TianHengZhuang/mavplan.git
+cd mavplan
+python -m pip install .
+
+# Optional MAVLink support for upload/download to a real autopilot:
+python -m pip install pymavlink
 ```
+
+`mavplan` is not published on PyPI yet, so install it from this repository.
 
 ## CLI
 
@@ -106,6 +121,12 @@ conn.close()
 ```
 
 ## Changelog
+
+### v1.5.0 (2026-09-09)
+- Added survey and photogrammetry training: camera models, GSD and overlap calculations, automatic lane spacing, shutter spacing, and coverage validation
+- Added task-generation, grading, and HTML reporting workflows for training scenarios
+- Added preflight safety checks and no-fly-zone validation
+- Test suite: 216 passing tests
 
 ### v1.1.0 (2026-09-08)
 - **Interop layer**: two-way mission file conversion with real-world ground stations

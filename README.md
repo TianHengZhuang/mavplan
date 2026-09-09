@@ -4,16 +4,6 @@ MAVLink mission planner — define drone waypoints, generate patterns, analyze f
 
 Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 
-## Current release
-
-**v1.5.0** adds a training-oriented workflow on top of mission planning:
-
-- Task generation, automated grading, and self-contained HTML score reports
-- Preflight checks for no-fly zones, range, altitude, turns, and battery margin
-- Survey and photogrammetry calculations for camera field of view, GSD, overlap, lane spacing, and coverage validation
-
-The project currently has 216 passing tests. See the [roadmap](docs/ROADMAP.md) for completed milestones and planned visual mission previews.
-
 ## Features
 
 - **Mission planning** (v0.1): Define waypoints with position, altitude, speed, delay, yaw
@@ -23,20 +13,19 @@ The project currently has 216 passing tests. See the [roadmap](docs/ROADMAP.md) 
 - **KML import + templates** (v0.5): Import KML files as missions, use built-in templates
 - **Mission simulation** (v0.6): Battery estimation, wind effects, geofence check, safety validation
 - **Interop + actions** (v1.1): Import/export QGC `.plan` & WPL (Mission Planner/QGC), MAV_CMD DO_* action items, camera-trigger insertion
+- **Teaching suite** (v1.3): Task briefs, automated grading, self-contained HTML score reports
+- **Safety preflight** (v1.4): No-fly zone model, mission check (range/altitude/turns/battery margin), `lost-link` teaching demo
+- **Survey & photogrammetry** (v1.5): Camera model (FOV/GSD/footprint), overlap-based lane & shutter spacing (`lawnmower --camera`), theoretical coverage validation, survey grading with GSD + side-overlap
+- **Training operations** (v1.6): CLI zh-CN i18n, scenario preset library (8 templates), `grade batch` for CAAC class workflows
 - **Export**: MAVLink waypoint file, QGC `.plan`, WPL, KML (Google Earth), CSV
 
 ## Install
 
 ```bash
-git clone https://github.com/TianHengZhuang/mavplan.git
-cd mavplan
-python -m pip install .
-
-# Optional MAVLink support for upload/download to a real autopilot:
-python -m pip install pymavlink
+pip install mavplan
+# For MAVLink support (upload/download to real autopilot):
+pip install mavplan[mavlink]
 ```
-
-`mavplan` is not published on PyPI yet, so install it from this repository.
 
 ## CLI
 
@@ -122,11 +111,34 @@ conn.close()
 
 ## Changelog
 
+### v1.6.0 (2026-09-09)
+- **Training operations edition**: complete the loop from "instructor prepares class" → "students fly" → "instructor grades the whole class"
+- **CLI zh-CN i18n** (`mavplan.i18n`): all CLI help / errors / reports / grading comments are Chinese-first; `--lang zh-CN|en` flag and `LANG` env var honored
+- **Scenario preset library** (`scenarios/*.yaml` + `mavplan.scenario`): 8 YAML templates — rectangle patrol, corridor transit, powerline inspection, agri spraying, search & rescue, bridge inspection, logistics delivery, lost-link demo
+- **New CLI**: `mavplan scenario {list,show,run}` to load and instantiate a preset into a fresh `TaskSpec` + `Mission`
+- **Batch class grading** (`mavplan.grade_batch` + `mavplan.class_summary`): `grade batch --roster roster.csv --logs logs/ --task plan.json --out reports/` grades every student in one pass and emits per-student HTML reports + a class summary CSV
+- **New CLI**: `mavplan grade batch` and `mavplan class summary <reports-dir>`
+- Test suite: 216 → 270 tests (100% passing), zero new runtime dependencies (YAML parsing uses stdlib `json` + a tiny home-grown reader)
+
 ### v1.5.0 (2026-09-09)
-- Added survey and photogrammetry training: camera models, GSD and overlap calculations, automatic lane spacing, shutter spacing, and coverage validation
-- Added task-generation, grading, and HTML reporting workflows for training scenarios
-- Added preflight safety checks and no-fly-zone validation
-- Test suite: 216 passing tests
+- **Survey & photogrammetry teaching suite**: camera model (sensor/focal/pixels → FOV, GSD, single-shot footprint), overlap-based lane & shutter spacing for `lawnmower --camera`, theoretical coverage validation, survey auto-grading (GSD + side-overlap) with Chinese lesson report, CLI smoke assets
+- New modules: `mavplan.survey` (camera geometry + coverage math), `mavplan.report_html` extensions
+- Test suite: 194 → 216 tests (100% passing), zero new runtime dependencies
+
+### v1.4.0 (2026-09-09)
+- **Safety preflight suite**: no-fly zone model (circle / polygon via KML / JSON), mission check (turn radius, bank angle, max range / altitude, zone intersection, battery margin), `simulate lost-link` teaching demo, preflight section merged into HTML score report, structured CLI smoke assets
+- New modules: `mavplan.nofly`
+- Test suite: 165 → 194 tests (100% passing), zero new runtime dependencies
+
+### v1.3.0 (2026-09-09)
+- **Teaching suite**: task briefs (`TaskSpec`), automated grading (`grade.py`), HTML score reports (`report_html.py`)
+- New modules: `mavplan.taskspec`, `mavplan.grade`, `mavplan.report_html`, `mavplan.taskgen`
+- New CLI: `mavplan task {new,generate,validate,show}`, `mavplan grade {run,batch,summary}`
+- Test suite: 138 → 165 tests (100% passing), zero new runtime dependencies
+
+### v1.2 — 计划中
+- **HTML mission preview & replay visualization** (`mission preview`, `analyze replay`) — visualization work was deferred to focus on training operations; tracked in `docs/ROADMAP.md` as ⬜ pending
+- No code shipped for v1.2; v1.3 → v1.5 added the training-grade infrastructure that v1.2 visualization will plug into
 
 ### v1.1.0 (2026-09-08)
 - **Interop layer**: two-way mission file conversion with real-world ground stations

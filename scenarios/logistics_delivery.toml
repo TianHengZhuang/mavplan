@@ -1,0 +1,65 @@
+[meta]
+name = "logistics_delivery"
+title_zh = "物流配送"
+title_en = "Logistics delivery"
+difficulty = "medium"
+description = "多航点物流配送，按顺序送达多个投递点"
+
+[home]
+lat = 31.2600
+lon = 121.5000
+alt = 0.0
+
+[task]
+altitude_min = 30.0
+altitude_max = 50.0
+speed_min = 8.0
+speed_max = 14.0
+max_time_s = 900.0
+max_distance_m = 8000.0
+
+[[required]]
+name = "投递点1"
+lat = 31.2650
+lon = 121.5050
+radius_m = 15.0
+kind = "point"
+
+[[required]]
+name = "投递点2"
+lat = 31.2700
+lon = 121.5100
+radius_m = 15.0
+kind = "point"
+
+[[required]]
+name = "投递点3"
+lat = 31.2750
+lon = 121.5150
+radius_m = 15.0
+kind = "point"
+
+[[no_fly_zones]]
+name = "居民区"
+lat = 31.2680
+lon = 121.5080
+radius_m = 60.0
+kind = "circle"
+
+[[waypoints]]
+lat = 31.2650
+lon = 121.5050
+alt = 40.0
+speed = 12.0
+
+[[waypoints]]
+lat = 31.2700
+lon = 121.5100
+alt = 40.0
+speed = 12.0
+
+[[waypoints]]
+lat = 31.2750
+lon = 121.5150
+alt = 40.0
+speed = 12.0

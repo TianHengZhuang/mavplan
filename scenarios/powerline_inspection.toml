@@ -1,0 +1,71 @@
+[meta]
+name = "powerline_inspection"
+title_zh = "电力巡线"
+title_en = "Power-line inspection"
+difficulty = "medium"
+description = "沿电力线路贴近飞行，巡查杆塔与线路健康度"
+
+[home]
+lat = 31.2000
+lon = 121.4300
+alt = 0.0
+
+[task]
+altitude_min = 25.0
+altitude_max = 45.0
+speed_min = 5.0
+speed_max = 10.0
+max_time_s = 600.0
+max_distance_m = 6000.0
+
+[[required]]
+name = "塔1"
+lat = 31.2050
+lon = 121.4400
+radius_m = 15.0
+kind = "point"
+
+[[required]]
+name = "塔2"
+lat = 31.2100
+lon = 121.4500
+radius_m = 15.0
+kind = "point"
+
+[[required]]
+name = "塔3"
+lat = 31.2150
+lon = 121.4600
+radius_m = 15.0
+kind = "point"
+
+[[required]]
+name = "塔4"
+lat = 31.2200
+lon = 121.4700
+radius_m = 15.0
+kind = "point"
+
+[[waypoints]]
+lat = 31.2050
+lon = 121.4400
+alt = 35.0
+speed = 8.0
+
+[[waypoints]]
+lat = 31.2100
+lon = 121.4500
+alt = 35.0
+speed = 8.0
+
+[[waypoints]]
+lat = 31.2150
+lon = 121.4600
+alt = 35.0
+speed = 8.0
+
+[[waypoints]]
+lat = 31.2200
+lon = 121.4700
+alt = 35.0
+speed = 8.0

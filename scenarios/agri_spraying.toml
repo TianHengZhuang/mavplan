@@ -1,0 +1,50 @@
+[meta]
+name = "agri_spraying"
+title_zh = "植保作业"
+title_en = "Agricultural spraying"
+difficulty = "medium"
+description = "农田植保无人机按行扫描喷洒作业，要求航线均匀且不漏喷"
+
+[home]
+lat = 31.1800
+lon = 121.4100
+alt = 0.0
+
+[task]
+altitude_min = 15.0
+altitude_max = 25.0
+speed_min = 4.0
+speed_max = 8.0
+max_time_s = 900.0
+max_distance_m = 8000.0
+
+[[required]]
+name = "田块"
+lat = 31.1850
+lon = 121.4200
+radius_m = 50.0
+kind = "area"
+
+[[waypoints]]
+lat = 31.1820
+lon = 121.4150
+alt = 20.0
+speed = 6.0
+
+[[waypoints]]
+lat = 31.1820
+lon = 121.4250
+alt = 20.0
+speed = 6.0
+
+[[waypoints]]
+lat = 31.1880
+lon = 121.4250
+alt = 20.0
+speed = 6.0
+
+[[waypoints]]
+lat = 31.1880
+lon = 121.4150
+alt = 20.0
+speed = 6.0

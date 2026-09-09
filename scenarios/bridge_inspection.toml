@@ -1,0 +1,58 @@
+[meta]
+name = "bridge_inspection"
+title_zh = "桥梁检测"
+title_en = "Bridge inspection"
+difficulty = "hard"
+description = "贴近桥梁结构进行多角度检测，考验精准悬停与贴壁飞行"
+
+[home]
+lat = 31.2400
+lon = 121.4900
+alt = 0.0
+
+[task]
+altitude_min = 20.0
+altitude_max = 50.0
+speed_min = 3.0
+speed_max = 6.0
+max_time_s = 600.0
+max_distance_m = 3000.0
+
+[[required]]
+name = "桥墩A"
+lat = 31.2410
+lon = 121.4920
+radius_m = 8.0
+kind = "point"
+
+[[required]]
+name = "桥墩B"
+lat = 31.2450
+lon = 121.4980
+radius_m = 8.0
+kind = "point"
+
+[[required]]
+name = "桥面"
+lat = 31.2430
+lon = 121.4950
+radius_m = 12.0
+kind = "point"
+
+[[waypoints]]
+lat = 31.2410
+lon = 121.4920
+alt = 35.0
+speed = 4.0
+
+[[waypoints]]
+lat = 31.2430
+lon = 121.4950
+alt = 35.0
+speed = 4.0
+
+[[waypoints]]
+lat = 31.2450
+lon = 121.4980
+alt = 35.0
+speed = 4.0

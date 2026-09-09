@@ -1,0 +1,45 @@
+[meta]
+name = "lost_link_demo"
+title_zh = "链路丢失演示"
+title_en = "Lost-link demo"
+difficulty = "easy"
+description = "演示链路丢失后自动返航逻辑，配套 simulate lost-link 命令"
+
+[home]
+lat = 31.2000
+lon = 121.4000
+alt = 0.0
+
+[task]
+altitude_min = 30.0
+altitude_max = 50.0
+speed_min = 8.0
+speed_max = 12.0
+max_time_s = 480.0
+max_distance_m = 3000.0
+
+[[required]]
+name = "远点"
+lat = 31.2100
+lon = 121.4150
+radius_m = 30.0
+kind = "point"
+
+[[no_fly_zones]]
+name = "民区"
+lat = 31.2050
+lon = 121.4100
+radius_m = 50.0
+kind = "circle"
+
+[[waypoints]]
+lat = 31.2050
+lon = 121.4050
+alt = 40.0
+speed = 10.0
+
+[[waypoints]]
+lat = 31.2100
+lon = 121.4150
+alt = 40.0
+speed = 10.0

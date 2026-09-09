@@ -1,0 +1,65 @@
+[meta]
+name = "corridor_transit"
+title_zh = "走廊穿越"
+title_en = "Corridor transit"
+difficulty = "medium"
+description = "在狭窄走廊内穿越两个目标点，考验航点精度与航线规划能力"
+
+[home]
+lat = 31.2100
+lon = 121.4500
+alt = 0.0
+
+[task]
+altitude_min = 30.0
+altitude_max = 50.0
+speed_min = 6.0
+speed_max = 10.0
+max_time_s = 300.0
+max_distance_m = 2500.0
+
+[[required]]
+name = "起点"
+lat = 31.2150
+lon = 121.4500
+radius_m = 15.0
+kind = "point"
+
+[[required]]
+name = "终点"
+lat = 31.2250
+lon = 121.4550
+radius_m = 15.0
+kind = "point"
+
+[[no_fly_zones]]
+name = "北侧禁飞"
+lat = 31.2200
+lon = 121.4500
+radius_m = 30.0
+kind = "circle"
+
+[[no_fly_zones]]
+name = "南侧禁飞"
+lat = 31.2200
+lon = 121.4580
+radius_m = 30.0
+kind = "circle"
+
+[[waypoints]]
+lat = 31.2150
+lon = 121.4500
+alt = 40.0
+speed = 8.0
+
+[[waypoints]]
+lat = 31.2200
+lon = 121.4525
+alt = 40.0
+speed = 8.0
+
+[[waypoints]]
+lat = 31.2250
+lon = 121.4550
+alt = 40.0
+speed = 8.0

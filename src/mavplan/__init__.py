@@ -1,4 +1,5 @@
 """mavplan — MAVLink mission planner."""
+from .i18n import t, set_language, get_language, available as i18n_available
 from .mission import Mission
 from .waypoint import Waypoint
 from .actions import (
@@ -104,6 +105,20 @@ from .survey import (
     coverage_ratio,
     format_survey_check_text,
 )
+from .scenario import (
+    ScenarioSpec,
+    list_scenarios,
+    load_scenario,
+    materialise_mission,
+    default_scenarios_dir,
+)
+from .grade_batch import (
+    batch_grade,
+    class_summary_text,
+    load_roster,
+    ClassResult,
+    StudentRow,
+)
 from .report_html import (
     render_report,
     render_survey_report,
@@ -196,5 +211,16 @@ __all__ = [
     "coverage_ratio",
     "format_survey_check_text",
     "render_survey_report",
+    # v1.6 -- training ops: i18n, scenarios, batch grading
+    "ScenarioSpec",
+    "list_scenarios",
+    "load_scenario",
+    "materialise_mission",
+    "default_scenarios_dir",
+    "batch_grade",
+    "class_summary_text",
+    "load_roster",
+    "ClassResult",
+    "StudentRow",
 ]
-__version__ = "1.5.0"
+__version__ = "1.6.0"

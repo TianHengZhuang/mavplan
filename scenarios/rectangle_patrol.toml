@@ -1,0 +1,84 @@
+[meta]
+name = "rectangle_patrol"
+title_zh = "矩形巡检"
+title_en = "Rectangle patrol"
+difficulty = "easy"
+description = "围绕矩形区域进行顺时针/逆时针巡航巡检，入门级 CAAC 实操任务"
+
+[home]
+lat = 31.2300
+lon = 121.4700
+alt = 0.0
+
+[task]
+altitude_min = 40.0
+altitude_max = 60.0
+speed_min = 8.0
+speed_max = 12.0
+max_time_s = 480.0
+max_distance_m = 4000.0
+
+[[required]]
+name = "NW"
+lat = 31.2350
+lon = 121.4700
+radius_m = 25.0
+kind = "point"
+
+[[required]]
+name = "NE"
+lat = 31.2350
+lon = 121.4800
+radius_m = 25.0
+kind = "point"
+
+[[required]]
+name = "SE"
+lat = 31.2250
+lon = 121.4800
+radius_m = 25.0
+kind = "point"
+
+[[required]]
+name = "SW"
+lat = 31.2250
+lon = 121.4700
+radius_m = 25.0
+kind = "point"
+
+[[no_fly_zones]]
+name = "学校"
+lat = 31.2300
+lon = 121.4750
+radius_m = 80.0
+kind = "circle"
+
+[[waypoints]]
+lat = 31.2310
+lon = 121.4700
+alt = 50.0
+speed = 10.0
+
+[[waypoints]]
+lat = 31.2350
+lon = 121.4700
+alt = 50.0
+speed = 10.0
+
+[[waypoints]]
+lat = 31.2350
+lon = 121.4800
+alt = 50.0
+speed = 10.0
+
+[[waypoints]]
+lat = 31.2250
+lon = 121.4800
+alt = 50.0
+speed = 10.0
+
+[[waypoints]]
+lat = 31.2250
+lon = 121.4700
+alt = 50.0
+speed = 10.0

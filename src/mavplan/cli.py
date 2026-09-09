@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 
+from . import i18n
 from .mission import Mission
 from .waypoint import Waypoint
 from .actions import command_id, command_name
@@ -1423,16 +1424,236 @@ def survey_check_cmd(mission_path, camera_name, alt_fallback_m, side_overlap,
 
 
 # ------------------------------------------------------------------
+# v1.6: grade / scenario / class command groups
+# ------------------------------------------------------------------
+from .grade_batch import batch_grade, class_summary_text, load_roster
+from .scenario import (
+    list_scenarios,
+    load_scenario,
+    materialise_mission,
+    default_scenarios_dir,
+    validate_scenario,
+)
+
+
+@click.group(name="scenario")
+def scenario() -> None:
+    """Scenario presets — list, show, and run bundled training scenarios."""
+    pass
+
+
+@scenario.command("list")
+def scenario_list() -> None:
+    """List all available scenario presets."""
+    scenarios = list_scenarios()
+    if not scenarios:
+        click.echo("No scenarios found.")
+        return
+    click.echo(f"Available scenarios ({len(scenarios)}):")
+    for name in scenarios:
+        try:
+            spec = load_scenario(name)
+            title = spec.title()
+            click.echo(f"  {name:30s}  [{spec.difficulty:6s}]  {title}")
+        except Exception as exc:  # noqa: BLE001
+            click.echo(f"  {name:30s}  ERROR: {exc}")
+
+
+@scenario.command("show")
+@click.argument("name")
+def scenario_show(name: str) -> None:
+    """Show details of a named scenario."""
+    try:
+        spec = load_scenario(name)
+        click.echo(f"Scenario: {name}")
+        click.echo(f"  Title:     {spec.title_zh} / {spec.title_en}")
+        click.echo(f"  Difficulty: {spec.difficulty}")
+        click.echo(f"  Description: {spec.description}")
+        click.echo(f"  Home:      ({spec.task.home[0]}, {spec.task.home[1]}, alt={spec.task.home[2]} m)")
+        click.echo(
+            f"  Alt range: {spec.task.altitude_range[0]}-{spec.task.altitude_range[1]} m"
+        )
+        click.echo(
+            f"  Speed range: {spec.task.speed_range[0]}-{spec.task.speed_range[1]} m/s"
+        )
+        click.echo(f"  Max time:  {spec.task.max_time_s:.0f} s")
+        click.echo(f"  Max dist:  {spec.task.max_distance_m:.0f} m")
+        click.echo(f"  Required:  {len(spec.task.required)} checkpoint(s)")
+        click.echo(f"  No-fly:    {len(spec.task.no_fly_zones)} zone(s)")
+        click.echo(f"  Waypoints: {len(spec.waypoints)}")
+        errs = validate_scenario(spec)
+        if errs:
+            click.echo("  Validation errors:")
+            for e in errs:
+                click.echo(f"    - {e}")
+        else:
+            click.echo("  Validation: OK")
+    except FileNotFoundError:
+        click.echo(f"Scenario not found: {name}", err=True)
+        click.echo(f"Run 'mavplan scenario list' to see available scenarios.", err=True)
+        raise SystemExit(1)
+
+
+@scenario.command("run")
+@click.argument("name")
+@click.option(
+    "--scenarios-dir",
+    type=click.Path(exists=True),
+    default=None,
+    help="Custom scenarios directory (default: bundled scenarios/)",
+)
+@click.option(
+    "--task-out",
+    "task_out",
+    type=click.Path(),
+    default=None,
+    help="Save task spec to this file (default: do not save)",
+)
+@click.option(
+    "--mission-out",
+    "mission_out",
+    type=click.Path(),
+    default=None,
+    help="Save mission to this file (default: do not save)",
+)
+def scenario_run(
+    name: str, scenarios_dir: str | None, task_out: str | None, mission_out: str | None
+) -> None:
+    """Generate a task spec and mission from a named scenario."""
+    from pathlib import Path
+
+    try:
+        root = Path(scenarios_dir) if scenarios_dir else None
+        spec = load_scenario(name, scenarios_dir=root)
+        errs = validate_scenario(spec)
+        if errs:
+            for e in errs:
+                click.echo(f"WARNING: {e}", err=True)
+        click.echo(f"Scenario loaded: {spec.title()}")
+        if task_out:
+            spec.task.save(task_out)
+            click.echo(f"Task spec saved: {task_out}")
+        if mission_out:
+            mission = materialise_mission(spec)
+            mission.save(mission_out)
+            click.echo(f"Mission saved: {mission_out}")
+    except FileNotFoundError:
+        click.echo(f"Scenario not found: {name}", err=True)
+        raise SystemExit(1)
+
+
+# ------------------------------------------------------------------
+# grade subcommands (v1.6)
+# ------------------------------------------------------------------
+
+
+@click.group(name="grade")
+def grade() -> None:
+    """Grade flight logs — single or batch class grading."""
+    pass
+
+
+@grade.command("run")
+@click.argument("log_path", type=click.Path(exists=True))
+@click.argument("task_path", type=click.Path(exists=True))
+@click.option("--student", default="", help="Student name")
+@click.option("--output", "-o", default="", help="Output HTML report path")
+def grade_run(log_path: str, task_path: str, student: str, output: str) -> None:
+    """Grade a single flight log against a task spec, print score to stdout."""
+    from .flightlog import parse_csv, parse_mavplan_json
+    from pathlib import Path
+
+    task = TaskSpec.load(task_path)
+    path = Path(log_path)
+    flight = parse_mavplan_json(path) if path.suffix == ".json" else parse_csv(path)
+    result = grade_flight(task, flight, student=student)
+    click.echo(f"Score: {result.score:.1f} / 100")
+    click.echo(f"Grade: {result.comment or '(no comment)'}")
+    for d in result.deductions:
+        click.echo(f"  [{d.category}] {d.message} (-{d.points:.0f})")
+    if output:
+        from .report_html import render_report
+
+        render_report(task=task, result=result, flight=flight, output_path=output)
+        click.echo(f"HTML report: {output}")
+
+
+@grade.command("batch")
+@click.argument("roster_path", type=click.Path(exists=True))
+@click.argument("logs_dir", type=click.Path(exists=True))
+@click.argument("task_path", type=click.Path(exists=True))
+@click.option(
+    "--out", "out_dir", type=click.Path(), default=".",
+    help="Output directory for HTML reports and class_summary.csv (default: .)",
+)
+@click.option(
+    "--pass-score", type=float, default=60.0,
+    help="Pass threshold (default: 60.0)",
+)
+def grade_batch(
+    roster_path: str, logs_dir: str, task_path: str, out_dir: str, pass_score: float
+) -> None:
+    """Batch-grade a whole class.  Requires a roster CSV, a logs directory, and a task spec JSON."""
+    from pathlib import Path
+
+    result = batch_grade(
+        roster_path=Path(roster_path),
+        logs_dir=Path(logs_dir),
+        task_path=Path(task_path),
+        out_dir=Path(out_dir),
+        pass_threshold=pass_score,
+    )
+    counts = result.summary_counts()
+    click.echo(f"Batch grading complete:")
+    click.echo(f"  Total:   {counts['total']}")
+    click.echo(f"  Graded:  {counts['graded']}")
+    click.echo(f"  Passed:  {counts['passed']}")
+    click.echo(f"  Failed:  {counts['failed']}")
+    click.echo(f"  Pass rate: {result.pass_rate():.1%}")
+    csv_path = Path(out_dir) / "class_summary.csv"
+    click.echo(f"Summary CSV: {csv_path}")
+
+
+# ------------------------------------------------------------------
+# class subcommands (v1.6)
+# ------------------------------------------------------------------
+
+
+@click.group(name="class")
+def cls_cmd() -> None:
+    """Class-level operations (summary roll-up after batch grading)."""
+    pass
+
+
+@cls_cmd.command("summary")
+@click.argument("out_dir", type=click.Path(exists=True), default=".")
+def class_summary(out_dir: str) -> None:
+    """Print a human-readable class summary from a previous batch grading run."""
+    from pathlib import Path
+
+    text = class_summary_text(Path(out_dir))
+    click.echo(text)
+
+
+# ------------------------------------------------------------------
 # root
 # ------------------------------------------------------------------
 @click.group()
-def main() -> None:
+@click.option(
+    "--lang",
+    type=click.Choice(["zh-CN", "en"]),
+    default=None,
+    is_eager=True,
+    callback=lambda _, __, val: i18n.set_language(val) if val else None,
+    help=i18n.t("app.lang_help"),
+)
+def main(lang: str | None) -> None:
     """mavplan — MAVLink mission planner CLI.
 
     Quick start:
-      mavplan waypoint add --lat 31.23 --lon 121.47 --alt 50
-      mavplan waypoint add --lat 31.24 --lon 121.48 --alt 50
-      mavplan export kml -o mission.kml
+      mavplan scenario list
+      mavplan scenario run rectangle_patrol --task-out task.json --mission-out mission.json
+      mavplan grade batch roster.csv logs/ task.json --out reports/
     """
     pass
 
@@ -1447,6 +1668,9 @@ main.add_command(link)
 main.add_command(simulate)
 main.add_command(task)
 main.add_command(survey)
+main.add_command(grade)
+main.add_command(scenario)
+main.add_command(cls_cmd, name="class")
 
 
 if __name__ == "__main__":

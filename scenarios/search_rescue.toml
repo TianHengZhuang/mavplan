@@ -1,0 +1,65 @@
+[meta]
+name = "search_rescue"
+title_zh = "应急搜救"
+title_en = "Search and rescue"
+difficulty = "hard"
+description = "多区域应急搜救，模拟灾害现场覆盖多个搜索区域"
+
+[home]
+lat = 31.2700
+lon = 121.5100
+alt = 0.0
+
+[task]
+altitude_min = 50.0
+altitude_max = 80.0
+speed_min = 10.0
+speed_max = 15.0
+max_time_s = 1200.0
+max_distance_m = 10000.0
+
+[[required]]
+name = "搜索区A"
+lat = 31.2750
+lon = 121.5200
+radius_m = 100.0
+kind = "area"
+
+[[required]]
+name = "搜索区B"
+lat = 31.2850
+lon = 121.5300
+radius_m = 100.0
+kind = "area"
+
+[[required]]
+name = "搜索区C"
+lat = 31.2950
+lon = 121.5400
+radius_m = 100.0
+kind = "area"
+
+[[no_fly_zones]]
+name = "火场核心"
+lat = 31.2800
+lon = 121.5250
+radius_m = 80.0
+kind = "circle"
+
+[[waypoints]]
+lat = 31.2750
+lon = 121.5200
+alt = 60.0
+speed = 12.0
+
+[[waypoints]]
+lat = 31.2850
+lon = 121.5300
+alt = 60.0
+speed = 12.0
+
+[[waypoints]]
+lat = 31.2950
+lon = 121.5400
+alt = 60.0
+speed = 12.0

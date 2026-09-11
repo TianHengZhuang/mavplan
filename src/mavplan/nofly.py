@@ -212,7 +212,7 @@ def load_zones_json(path: str | Path) -> list[Zone]:
     single zone dict. Each zone follows ``Zone.to_dict()`` (kind circle or
     polygon). Invalid entries raise ValueError.
     """
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     if isinstance(data, dict) and "zones" in data:
         data = data["zones"]
     if isinstance(data, dict):

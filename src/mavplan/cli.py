@@ -1,9 +1,11 @@
 """Command-line interface for mavplan."""
 from __future__ import annotations
 
+import csv
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import click
 
@@ -390,6 +392,67 @@ def mission_check(mission_path: str, zones_kml: str, zones_json: str, max_distan
             f"  Summary: {summary['errors']} error(s), "
             f"{summary['warnings']} warning(s), {summary['info']} info"
         )
+
+
+@mission.command("preview")
+@click.argument("mission_path", type=click.Path(exists=True), required=False)
+@click.option("--output", "-o", "output", type=click.Path(), default="mission_preview.html",
+              help="Output HTML path (default: mission_preview.html)")
+@click.option("--zones-kml", "zones_kml", type=click.Path(exists=True), default=None,
+              help="Optional KML no-fly zones to overlay")
+@click.option("--zones-json", "zones_json", type=click.Path(exists=True), default=None,
+              help="Optional JSON no-fly zones to overlay")
+@click.option("--title", default="", help="Page title override")
+def mission_preview(
+    mission_path: Optional[str],
+    output: str,
+    zones_kml: Optional[str],
+    zones_json: Optional[str],
+    title: str,
+) -> None:
+    """Render a self-contained offline HTML preview (map + altitude profile).
+
+    Example:
+      mavplan mission preview plan.json -o preview.html --zones-json zones.json
+      mavplan mission preview            # uses the current CLI mission store
+    """
+    from .preview_html import render_mission_preview
+
+    try:
+        mission = Mission.load(mission_path) if mission_path else _load_mission()
+    except Exception as e:
+        click.echo(f"  Error loading mission: {e}", err=True)
+        sys.exit(1)
+    if not mission.waypoints():
+        click.echo("  Error: mission has no waypoints", err=True)
+        sys.exit(1)
+
+    zones = []
+    if zones_kml:
+        try:
+            zones += load_zones_from_kml(zones_kml)
+        except ValueError as e:
+            click.echo(f"  Error loading zones KML: {e}", err=True)
+            sys.exit(1)
+    if zones_json:
+        try:
+            zones += load_zones_json(zones_json)
+        except ValueError as e:
+            click.echo(f"  Error loading zones JSON: {e}", err=True)
+            sys.exit(1)
+
+    try:
+        html_doc = render_mission_preview(
+            mission, zones=zones or None, title=title, output_path=output
+        )
+    except Exception as e:
+        click.echo(f"  Error rendering preview: {e}", err=True)
+        sys.exit(1)
+
+    size_kb = len(html_doc.encode("utf-8")) / 1024.0
+    click.echo(f"  Preview written: {output} ({size_kb:.1f} KB, {len(mission)} waypoints)")
+    if size_kb > 2048:
+        click.echo("  Warning: file exceeds 2 MB teaching target", err=True)
 
 
 # ------------------------------------------------------------------
@@ -1611,7 +1674,9 @@ def grade_batch(
     click.echo(f"  Failed:  {counts['failed']}")
     click.echo(f"  Pass rate: {result.pass_rate():.1%}")
     csv_path = Path(out_dir) / "class_summary.csv"
-    click.echo(f"Summary CSV: {csv_path}")
+    html_path = Path(out_dir) / "class_summary.html"
+    click.echo(f"Summary CSV:  {csv_path}")
+    click.echo(f"Summary HTML: {html_path}")
 
 
 # ------------------------------------------------------------------
@@ -1633,6 +1698,59 @@ def class_summary(out_dir: str) -> None:
 
     text = class_summary_text(Path(out_dir))
     click.echo(text)
+
+
+@cls_cmd.command("report")
+@click.argument("out_dir", type=click.Path(exists=True), default=".")
+@click.option("--output", "-o", type=click.Path(), default="",
+              help="Output HTML path (default: <out_dir>/class_summary.html)")
+def class_report(out_dir: str, output: str) -> None:
+    """Rebuild the printable class overview HTML from class_summary.csv."""
+    from pathlib import Path
+
+    from .grade_batch import (
+        ClassResult,
+        StudentRow,
+        write_class_summary_html,
+    )
+
+    out = Path(out_dir)
+    csv_path = out / "class_summary.csv"
+    if not csv_path.is_file():
+        click.echo(f"  Error: {csv_path} not found — run grade batch first", err=True)
+        sys.exit(1)
+
+    rows = []
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        task_name = "班级成绩"
+        for raw in reader:
+            sid = (raw.get("student_id") or "").strip()
+            if not sid:
+                continue
+            score_raw = (raw.get("score") or "").strip()
+            passed_raw = (raw.get("passed") or "").strip().lower()
+            deductions: dict[str, float] = {}
+            comment = raw.get("comment") or ""
+            rows.append(
+                StudentRow(
+                    student_id=sid,
+                    name=(raw.get("name") or "").strip(),
+                    score=float(score_raw) if score_raw else None,
+                    passed=(True if passed_raw == "true" else False) if passed_raw in ("true", "false") else None,
+                    status=(raw.get("status") or "").strip(),
+                    deductions=deductions,
+                    comment=comment,
+                    report_path=(raw.get("report_path") or "").strip() or None,
+                )
+            )
+    result = ClassResult(task_name=task_name, students=rows)
+    path = write_class_summary_html(result, out)
+    if output:
+        Path(output).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        click.echo(f"  Class HTML: {output}")
+    else:
+        click.echo(f"  Class HTML: {path}")
 
 
 # ------------------------------------------------------------------

@@ -4,18 +4,17 @@
 > 航线规划教学、模拟飞行与考核评估），同时保持通用任务规划器能力。
 > 节奏：快速迭代——每攒一批可交付功能即发一个小版本（semver）。
 
-## 现状盘点（v1.5.0，2026-09-09）
+## 现状盘点（v1.7.0，2026-09-11）
 
 - 任务规划：Waypoint/Mission CRUD、lawnmower/orbit/polygon 自动航迹、起飞/降落自动插入；home 位置持久化
 - 导入导出：MAVLink(mav)、**QGC `.plan` JSON、QGC WPL 110/120（双向）**、KML、CSV；KML 导入 + 模板库；`mission import` 自动探测格式
 - 航点动作：MAV_CMD 常量层（NAV_*/DO_*）、`Mission.add_action()`、`add_camera_trigger()`、CLI `waypoint action` / `mission camera`
 - 分析：飞行日志解析（CSV/JSON）、compare_to_plan（覆盖率/命中率/高度偏差）
 - 仿真：能量估算（BatteryModel）、风扰（WindModel）、围栏检查、HTML 报告
-- 链路：pymavlink 上传下载（可选依赖）；CLI 全覆盖；138 tests / 100% 通过
+- 教学：任务书/判分/HTML 成绩报告、场景库、批改、**离线任务预览 + 班级汇总 HTML（v1.7）**
+- 链路：pymavlink 上传下载（可选依赖）；CLI 全覆盖
 
-**面向培训教学的缺口**：无可视化（教学演示难）、无禁飞区/安全预检（安全意识教学）、
-无任务书/判分闭环（考核场景空白）、测绘计算（进阶课程空白）。
-（v1.1 遗留：`.plan` geo-fence/rally 段读入不保留、仅导出空结构 → v1.4 补齐）
+**仍缺**：飞行回放（`analyze replay`）、GUI、PyPI 发布流水线。
 
 ## 版本路线图
 
@@ -28,16 +27,15 @@
 
 验收达成：WPL/.plan round-trip 测试（坐标 ±1e-6 级）；动作在 WPL/.plan/MAVLink 中编码一致；138 tests 全绿。
 
-### v1.2 —— 可视化：任务预览 + 模拟回放（教学演示核心）
+### v1.2 —— 可视化：任务预览 + 模拟回放（教学演示核心）⬜ 部分完成（预览并入 v1.7）
 
 目标：无 GUI 依赖的"地图感"可视化，教员可直接投屏讲解。
 
-1. **HTML 任务预览页**：`mission preview out.html`
-   - 单文件自包含（内联 Leaflet 国产化前先用 OpenStreetMap 瓦片 + 离线降级线框图），
-     显示航点序号/高度剖面/航向箭头/自动生成的 lawnmower 覆盖带
-2. **飞行回放**：`analyze replay flight.csv --plan plan.json --out replay.html`
+1. **HTML 任务预览页**：`mission preview out.html` ✅（v1.7.0，2026-09-11）
+   - 单文件自包含内联 SVG（离线），显示航点序号/高度剖面/航向箭头/lawnmower 覆盖带/禁飞区
+2. **飞行回放**：`analyze replay flight.csv --plan plan.json --out replay.html` ⬜
    - 时间轴滑块 + 飞行轨迹 vs 计划航线对比 + 实时速度/高度仪表
-3. **KML 增强**：航点图标化、航线宽度/颜色参数化（供 Google Earth 教学演示）
+3. **KML 增强**：航点图标化、航线宽度/颜色参数化（供 Google Earth 教学演示）⬜
 
 验收：离线可用（无网时退化为矢量线框图）；回放帧率可调；生成文件 < 2MB。
 

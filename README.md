@@ -17,6 +17,7 @@ Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 - **Safety preflight** (v1.4): No-fly zone model, mission check (range/altitude/turns/battery margin), `lost-link` teaching demo
 - **Survey & photogrammetry** (v1.5): Camera model (FOV/GSD/footprint), overlap-based lane & shutter spacing (`lawnmower --camera`), theoretical coverage validation, survey grading with GSD + side-overlap
 - **Training operations** (v1.6): CLI zh-CN i18n, scenario preset library (8 templates), `grade batch` for CAAC class workflows
+- **Teaching preview** (v1.7): offline HTML mission preview (`mission preview`), printable class overview (`class_summary.html`)
 - **Export**: MAVLink waypoint file, QGC `.plan`, WPL, KML (Google Earth), CSV
 
 ## Install
@@ -67,6 +68,11 @@ mavplan export kml -o mission.kml
 mavplan export mavlink -o mission.txt
 mavplan export csv -o mission.csv
 mavplan mission validate
+
+# --- Teaching preview (v1.7) ---
+mavplan mission preview plan.json -o preview.html
+mavplan mission preview plan.json -o preview.html --zones-json zones.json
+mavplan class report reports/          # rebuild class_summary.html
 ```
 
 ## Python API
@@ -111,6 +117,15 @@ conn.close()
 
 ## Changelog
 
+### v1.7.0 (2026-09-11)
+- **Teaching preview**: offline single-file HTML mission preview for classroom projection
+- New module: `mavplan.preview_html` (`render_mission_preview`)
+- New CLI: `mavplan mission preview [plan.json] -o preview.html` with optional `--zones-kml` / `--zones-json` overlay
+- Preview shows: local ENU SVG map (waypoint numbers, heading arrows, lawnmower coverage bands, no-fly zones), altitude profile vs cumulative distance, click-to-highlight, waypoint table
+- **Class overview HTML**: `grade batch` now also writes printable `class_summary.html`; `mavplan class report <dir>` rebuilds it from `class_summary.csv`
+- Fixed: `Mission.load` and `load_zones_json` now accept UTF-8 BOM files (PowerShell `Set-Content -Encoding utf8` writes a BOM)
+- Test suite: 270 → 282 tests (100% passing), zero new runtime dependencies
+
 ### v1.6.0 (2026-09-09)
 - **Training operations edition**: complete the loop from "instructor prepares class" → "students fly" → "instructor grades the whole class"
 - **CLI zh-CN i18n** (`mavplan.i18n`): all CLI help / errors / reports / grading comments are Chinese-first; `--lang zh-CN|en` flag and `LANG` env var honored
@@ -136,9 +151,9 @@ conn.close()
 - New CLI: `mavplan task {new,generate,validate,show}`, `mavplan grade {run,batch,summary}`
 - Test suite: 138 → 165 tests (100% passing), zero new runtime dependencies
 
-### v1.2 — 计划中
-- **HTML mission preview & replay visualization** (`mission preview`, `analyze replay`) — visualization work was deferred to focus on training operations; tracked in `docs/ROADMAP.md` as ⬜ pending
-- No code shipped for v1.2; v1.3 → v1.5 added the training-grade infrastructure that v1.2 visualization will plug into
+### v1.2 — 部分并入 v1.7
+- HTML mission preview shipped as **v1.7.0** (`mission preview`); flight replay (`analyze replay`) remains pending
+- Original v1.2 slot is no longer a separate release line
 
 ### v1.1.0 (2026-09-08)
 - **Interop layer**: two-way mission file conversion with real-world ground stations

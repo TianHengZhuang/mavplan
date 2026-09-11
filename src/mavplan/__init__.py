@@ -118,10 +118,15 @@ from .grade_batch import (
     load_roster,
     ClassResult,
     StudentRow,
+    write_class_summary_html,
+    render_class_summary_html,
 )
 from .report_html import (
     render_report,
     render_survey_report,
+)
+from .preview_html import (
+    render_mission_preview,
 )
 
 __all__ = [
@@ -222,5 +227,8 @@ __all__ = [
     "load_roster",
     "ClassResult",
     "StudentRow",
+    "write_class_summary_html",
+    "render_class_summary_html",
+    "render_mission_preview",
 ]
-__version__ = "1.6.0"
+__version__ = "1.7.0"

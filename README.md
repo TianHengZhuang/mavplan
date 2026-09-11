@@ -117,6 +117,11 @@ conn.close()
 
 ## Changelog
 
+### v1.7.1 (2026-09-11)
+- Fixed: `mavplan class report` crashed with `AttributeError: 'Command' object has no attribute 'DictReader'` because the `export csv` Click command shadowed the stdlib `csv` module in `cli.py`
+- Fixed: `mavplan class report` crashed with `TypeError: ClassResult missing pass_threshold` when rebuilding HTML from `class_summary.csv`
+- Test suite: 282 → 283 tests (100% passing)
+
 ### v1.7.0 (2026-09-11)
 - **Teaching preview**: offline single-file HTML mission preview for classroom projection
 - New module: `mavplan.preview_html` (`render_mission_preview`)

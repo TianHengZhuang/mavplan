@@ -215,3 +215,27 @@ class TestBomTolerantLoad:
             )
             zones = load_zones_json(p)
             assert zones[0].name == "跑道"
+
+
+class TestClassReportCli:
+    def test_class_report_rebuilds_html_without_shadowed_csv(self) -> None:
+        """Regression: export csv command must not shadow the csv module."""
+        import csv as csv_mod
+        from click.testing import CliRunner
+        from mavplan.cli import main
+
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            with open(out / "class_summary.csv", "w", encoding="utf-8", newline="") as f:
+                w = csv_mod.writer(f, lineterminator="\n")
+                w.writerow(["student_id", "name", "score", "passed", "status", "comment", "report_path"])
+                w.writerow(["S001", "Zhang", "88.5", "true", "ok", "ok", "S001.html"])
+
+            runner = CliRunner()
+            result = runner.invoke(main, ["class", "report", str(out)])
+            assert result.exit_code == 0, result.output
+            html_path = out / "class_summary.html"
+            assert html_path.is_file()
+            text = html_path.read_text(encoding="utf-8")
+            assert "Zhang" in text
+            assert "88.5" in text

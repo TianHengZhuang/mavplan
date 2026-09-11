@@ -1706,9 +1706,13 @@ def class_summary(out_dir: str) -> None:
               help="Output HTML path (default: <out_dir>/class_summary.html)")
 def class_report(out_dir: str, output: str) -> None:
     """Rebuild the printable class overview HTML from class_summary.csv."""
+    # Local import: the module-level ``csv`` name is shadowed by the
+    # ``export csv`` Click command defined in this file.
+    import csv as csv_mod
     from pathlib import Path
 
     from .grade_batch import (
+        DEFAULT_PASS_SCORE,
         ClassResult,
         StudentRow,
         write_class_summary_html,
@@ -1722,7 +1726,7 @@ def class_report(out_dir: str, output: str) -> None:
 
     rows = []
     with open(csv_path, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
+        reader = csv_mod.DictReader(f)
         task_name = "班级成绩"
         for raw in reader:
             sid = (raw.get("student_id") or "").strip()
@@ -1744,7 +1748,11 @@ def class_report(out_dir: str, output: str) -> None:
                     report_path=(raw.get("report_path") or "").strip() or None,
                 )
             )
-    result = ClassResult(task_name=task_name, students=rows)
+    result = ClassResult(
+        task_name=task_name,
+        pass_threshold=DEFAULT_PASS_SCORE,
+        students=rows,
+    )
     path = write_class_summary_html(result, out)
     if output:
         Path(output).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")

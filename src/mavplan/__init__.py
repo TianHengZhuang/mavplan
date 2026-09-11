@@ -231,4 +231,4 @@ __all__ = [
     "render_class_summary_html",
     "render_mission_preview",
 ]
-__version__ = "1.7.0"
+__version__ = "1.7.1"

@@ -17,21 +17,25 @@ from .waypoint import Waypoint
 WPL_HEADERS = ("QGC WPL 110", "QGC WPL 120")
 
 
+def _read_text(source: str | Path) -> str:
+    """Read a mission file, tolerating a UTF-8 BOM (PowerShell ``utf8`` default)."""
+    if isinstance(source, (str, Path)) and Path(source).exists():
+        return Path(source).read_text(encoding="utf-8-sig", errors="replace")
+    return str(source).lstrip("﻿")
+
+
 def sniff_format(source: str | Path) -> str | None:
     """Detect mission file format from a path or raw text.
 
     Returns ``"mavplan"``, ``"wpl"``, ``"qgcplan"`` or None when unrecognised.
     """
-    if isinstance(source, (str, Path)) and Path(source).exists():
-        text = Path(source).read_text(encoding="utf-8", errors="replace")
-    else:
-        text = str(source)
+    text = _read_text(source)
     stripped = text.lstrip()
     if stripped.startswith(WPL_HEADERS):
         return "wpl"
     if stripped.startswith("{"):
         try:
-            data = json.loads(text)
+            data = json.loads(stripped)
         except json.JSONDecodeError:
             return None
         if data.get("fileType") == "Plan":
@@ -46,7 +50,7 @@ def load_mission_file(path: str | Path) -> Mission:
     fmt = sniff_format(path)
     if fmt is None:
         raise ValueError(f"Cannot detect mission format: {path}")
-    text = Path(path).read_text(encoding="utf-8")
+    text = _read_text(path)
     if fmt == "mavplan":
         return Mission.load(path)
     if fmt == "wpl":
@@ -65,6 +69,7 @@ def parse_wpl(text: str) -> Mission:
     ``mission.home``.  All remaining items — including DO_* action items —
     are preserved verbatim as waypoints.
     """
+    text = text.lstrip("﻿")
     mission = Mission(name="Imported Mission")
     seen_header = False
     for raw_line in text.splitlines():

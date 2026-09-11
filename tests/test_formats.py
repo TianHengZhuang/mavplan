@@ -22,6 +22,27 @@ WPL_SAMPLE = """QGC WPL 110
 4\t0\t3\t16\t0\t2\t0\t-9999\t31.2500000\t121.5000000\t70.00
 """
 
+
+def test_sniff_and_load_wpl_with_utf8_bom(tmp_path):
+    """PowerShell ``Set-Content -Encoding utf8`` writes a BOM; loaders must accept it."""
+    path = tmp_path / "mission.waypoints"
+    path.write_text(WPL_SAMPLE, encoding="utf-8-sig")
+    assert sniff_format(path) == "wpl"
+    mission = load_mission_file(path)
+    assert len(mission.waypoints()) == 4  # HOME row extracted
+
+
+def test_sniff_qgc_plan_with_utf8_bom(tmp_path):
+    path = tmp_path / "mission.plan"
+    path.write_text(json.dumps(QGC_PLAN_SAMPLE), encoding="utf-8-sig")
+    assert sniff_format(path) == "qgcplan"
+    mission = load_mission_file(path)
+    assert len(mission.waypoints()) >= 1
+
+
+def test_sniff_raw_text_with_bom_prefix():
+    assert sniff_format("﻿" + WPL_SAMPLE) == "wpl"
+
 QGC_PLAN_SAMPLE = {
     "fileType": "Plan",
     "version": 1,

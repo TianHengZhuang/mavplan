@@ -117,6 +117,11 @@ conn.close()
 
 ## Changelog
 
+### v1.7.2 (2026-09-11)
+- Fixed: `sniff_format` / `load_mission_file` rejected UTF-8 BOM on QGC WPL and `.plan` files (PowerShell `Set-Content -Encoding utf8` writes a BOM). `Mission.load` already accepted BOM; WPL/plan loaders now match.
+- Fixed: `parse_wpl` strips a leading BOM from raw text
+- Test suite: 283 → 286 tests (100% passing)
+
 ### v1.7.1 (2026-09-11)
 - Fixed: `mavplan class report` crashed with `AttributeError: 'Command' object has no attribute 'DictReader'` because the `export csv` Click command shadowed the stdlib `csv` module in `cli.py`
 - Fixed: `mavplan class report` crashed with `TypeError: ClassResult missing pass_threshold` when rebuilding HTML from `class_summary.csv`

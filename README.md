@@ -219,6 +219,12 @@ conn.close()
 - ArduPilot (Copter, Plane, Rover, Boat)
 - Generic MAVLink systems
 
+## Related projects
+
+- [mavplan-web](https://github.com/TianHengZhuang/mavplan-web) — offline browser console (Vue 3); [live demo](https://tianhengzhuang.github.io/mavplan-web/)
+- [Chinese-WebNovel-Master](https://github.com/TianHengZhuang/Chinese-WebNovel-Master) — Chinese web-fiction agent workflow
+- [One-click-AI-PPT-creation](https://github.com/TianHengZhuang/One-click-AI-PPT-creation) — topic → presentation deck skill
+
 ## License
 
 MIT

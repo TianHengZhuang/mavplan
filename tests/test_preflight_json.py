@@ -47,3 +47,22 @@ def test_summary_matches_report():
     params = PreflightParams(max_altitude_m=120.0)
     report = preflight_report(m, params=params)
     assert report["summary"] == preflight_summary(report["checks"])
+
+
+def test_cli_check_output_file(tmp_path):
+    from click.testing import CliRunner
+
+    from mavplan.cli import main
+
+    plan = tmp_path / "plan.json"
+    _mission().save(plan)
+    out = tmp_path / "preflight.json"
+    res = CliRunner().invoke(
+        main,
+        ["mission", "check", str(plan), "-o", str(out), "--max-distance", "5000"],
+    )
+    assert res.exit_code == 0, res.output
+    assert out.exists()
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    assert doc["schema"] == "mavplan.preflight/1"
+    assert doc["mission"]["waypoints"] == 3

@@ -117,6 +117,9 @@ conn.close()
 
 ## Changelog
 
+### v1.10.0 (2026-09-12)
+- CLI: `mavplan mission check -o preflight.json` writes the `mavplan.preflight/1` report to a file (same exit code 2 on errors)
+
 ### v1.9.0 (2026-09-12)
 - **Structured preflight**: `preflight_report()` returns `mavplan.preflight/1` (mission meta, summary, checks)
 - CLI: `mavplan mission check --json` emits the same document; exit code 2 when errors are present

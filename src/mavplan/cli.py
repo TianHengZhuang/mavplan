@@ -341,14 +341,17 @@ def camera(mode: str, value: float, after_seq: int, auto_save: bool) -> None:
               help="Battery reserve percent to keep")
 @click.option("--json", "as_json", is_flag=True, default=False,
               help="Emit machine-readable JSON (mavplan.preflight/1)")
+@click.option("--output", "-o", type=click.Path(), default=None,
+              help="Write preflight JSON report to a file (implies JSON document)")
 def mission_check(mission_path: str, zones_kml: str, zones_json: str, max_distance: float,
                   max_altitude: float, cruise_speed: float, bank_deg: float, cap_mah: float,
-                  voltage: float, reserve: float, as_json: bool) -> None:
+                  voltage: float, reserve: float, as_json: bool, output: str) -> None:
     """Safety preflight: distance, altitude, no-fly zones, turns, battery.
 
     Example:
       mavplan mission check plan.json --zones-kml airspace.kml
       mavplan mission check plan.json --json
+      mavplan mission check plan.json -o preflight.json
     """
     try:
         mission = Mission.load(mission_path)
@@ -378,9 +381,14 @@ def mission_check(mission_path: str, zones_kml: str, zones_json: str, max_distan
         battery=BatteryModel(capacity_mah=cap_mah, voltage=voltage),
         reserve_percent=reserve,
     )
-    if as_json:
+    if as_json or output:
         report = preflight_report(mission, zones, params)
-        click.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        payload = json.dumps(report, ensure_ascii=False, indent=2)
+        if output:
+            Path(output).write_text(payload + "\n", encoding="utf-8")
+            click.echo(f"  Wrote preflight report to {output}")
+        else:
+            click.echo(payload)
         if report["summary"]["errors"]:
             sys.exit(2)
         return

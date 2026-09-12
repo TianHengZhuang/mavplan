@@ -86,6 +86,7 @@ from .grade import (
 from .nofly import (
     PreflightParams,
     preflight_check,
+    preflight_report,
     preflight_summary,
     load_zones_from_kml,
     load_zones_json,
@@ -202,6 +203,7 @@ __all__ = [
     # v1.4 — safety preflight
     "PreflightParams",
     "preflight_check",
+    "preflight_report",
     "preflight_summary",
     "load_zones_from_kml",
     "load_zones_json",

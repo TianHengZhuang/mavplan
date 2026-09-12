@@ -117,6 +117,11 @@ conn.close()
 
 ## Changelog
 
+### v1.9.0 (2026-09-12)
+- **Structured preflight**: `preflight_report()` returns `mavplan.preflight/1` (mission meta, summary, checks)
+- CLI: `mavplan mission check --json` emits the same document; exit code 2 when errors are present
+- Public API: `preflight_report` exported from `mavplan`
+
 ### v1.8.0 (2026-09-12)
 - **GeoJSON export**: `Mission.to_geojson()` emits a FeatureCollection (waypoint Points + LineString path) for QGIS / web map overlays
 - New CLI: `mavplan export geojson -o mission.geojson`

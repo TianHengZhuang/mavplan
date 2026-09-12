@@ -74,6 +74,7 @@ from .nofly import (
     load_zones_from_kml,
     load_zones_json,
     preflight_check,
+    preflight_report,
     preflight_summary,
 )
 
@@ -338,13 +339,16 @@ def camera(mode: str, value: float, after_seq: int, auto_save: bool) -> None:
               help="Battery nominal voltage (V)")
 @click.option("--reserve", type=float, default=20.0,
               help="Battery reserve percent to keep")
+@click.option("--json", "as_json", is_flag=True, default=False,
+              help="Emit machine-readable JSON (mavplan.preflight/1)")
 def mission_check(mission_path: str, zones_kml: str, zones_json: str, max_distance: float,
                   max_altitude: float, cruise_speed: float, bank_deg: float, cap_mah: float,
-                  voltage: float, reserve: float) -> None:
+                  voltage: float, reserve: float, as_json: bool) -> None:
     """Safety preflight: distance, altitude, no-fly zones, turns, battery.
 
     Example:
       mavplan mission check plan.json --zones-kml airspace.kml
+      mavplan mission check plan.json --json
     """
     try:
         mission = Mission.load(mission_path)
@@ -374,6 +378,13 @@ def mission_check(mission_path: str, zones_kml: str, zones_json: str, max_distan
         battery=BatteryModel(capacity_mah=cap_mah, voltage=voltage),
         reserve_percent=reserve,
     )
+    if as_json:
+        report = preflight_report(mission, zones, params)
+        click.echo(json.dumps(report, ensure_ascii=False, indent=2))
+        if report["summary"]["errors"]:
+            sys.exit(2)
+        return
+
     items = preflight_check(mission, zones, params)
     summary = preflight_summary(items)
 

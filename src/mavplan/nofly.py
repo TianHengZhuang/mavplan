@@ -443,3 +443,36 @@ def preflight_summary(items: list[dict]) -> dict:
         "warnings": sum(1 for it in items if it["level"] == "warning"),
         "info": sum(1 for it in items if it["level"] == "info"),
     }
+
+
+def preflight_report(
+    mission: Mission,
+    zones: list[Zone] | None = None,
+    params: PreflightParams | None = None,
+) -> dict:
+    """Machine-readable preflight document for CLI ``--json`` and web consoles.
+
+    Shape::
+
+        {
+          "schema": "mavplan.preflight/1",
+          "mission": {"name": str, "waypoints": int},
+          "zones": int,
+          "summary": {"errors": int, "warnings": int, "info": int},
+          "checks": [{"code", "level", "message", "waypoint"?}, ...]
+        }
+
+    ``checks`` is the same list returned by :func:`preflight_check`.
+    """
+    zones = zones or []
+    items = preflight_check(mission, zones, params)
+    return {
+        "schema": "mavplan.preflight/1",
+        "mission": {
+            "name": mission.name,
+            "waypoints": len(mission.waypoints()),
+        },
+        "zones": len(zones),
+        "summary": preflight_summary(items),
+        "checks": items,
+    }

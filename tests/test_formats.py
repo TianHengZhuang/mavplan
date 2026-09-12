@@ -239,3 +239,36 @@ class TestLoadMissionFile:
         p.write_text("no format here", encoding="utf-8")
         with pytest.raises(ValueError):
             load_mission_file(p)
+
+
+class TestGeoJsonExport:
+    def _mission(self):
+        m = Mission(name="geo")
+        m.add_waypoint(lat=31.23, lon=121.47, alt=50, speed=10)
+        m.add_waypoint(lat=31.24, lon=121.48, alt=60, speed=12)
+        return m
+
+    def test_feature_collection_shape(self):
+        data = self._mission().to_geojson()
+        assert data["type"] == "FeatureCollection"
+        kinds = [f["properties"]["kind"] for f in data["features"]]
+        assert kinds.count("waypoint") == 2
+        assert kinds.count("path") == 1
+
+    def test_coordinates_are_lon_lat_alt(self):
+        data = self._mission().to_geojson()
+        point = next(f for f in data["features"] if f["geometry"]["type"] == "Point")
+        lon, lat, alt = point["geometry"]["coordinates"]
+        assert lon == pytest.approx(121.47, abs=1e-6)
+        assert lat == pytest.approx(31.23, abs=1e-6)
+        assert alt == pytest.approx(50.0, abs=1e-6)
+
+    def test_path_requires_two_points(self):
+        m = Mission(name="single")
+        m.add_waypoint(lat=31.23, lon=121.47, alt=50)
+        data = m.to_geojson()
+        assert all(f["properties"]["kind"] != "path" for f in data["features"])
+
+    def test_json_serializable(self):
+        payload = json.dumps(self._mission().to_geojson())
+        assert '"type": "FeatureCollection"' in payload

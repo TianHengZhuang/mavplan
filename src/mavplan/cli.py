@@ -494,6 +494,20 @@ def mavlink(output: str) -> None:
 
 @export.command()
 @click.option("--output", "-o", type=click.Path(), default="-")
+def geojson(output: str) -> None:
+    """Export to GeoJSON FeatureCollection (QGIS / web maps)."""
+    m = _load_mission()
+    if not m.waypoints():
+        click.echo("  Error: mission is empty", err=True)
+        sys.exit(1)
+    content = json.dumps(m.to_geojson(), indent=2)
+    _write_output(output, content)
+    if output != "-":
+        click.echo(f"  Exported GeoJSON to {output}")
+
+
+@export.command()
+@click.option("--output", "-o", type=click.Path(), default="-")
 def csv(output: str) -> None:
     """Export to CSV."""
     m = _load_mission()

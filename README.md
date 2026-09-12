@@ -18,7 +18,7 @@ Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 - **Survey & photogrammetry** (v1.5): Camera model (FOV/GSD/footprint), overlap-based lane & shutter spacing (`lawnmower --camera`), theoretical coverage validation, survey grading with GSD + side-overlap
 - **Training operations** (v1.6): CLI zh-CN i18n, scenario preset library (8 templates), `grade batch` for CAAC class workflows
 - **Teaching preview** (v1.7): offline HTML mission preview (`mission preview`), printable class overview (`class_summary.html`)
-- **Export**: MAVLink waypoint file, QGC `.plan`, WPL, KML (Google Earth), CSV
+- **Export**: MAVLink waypoint file, QGC `.plan`, WPL, KML (Google Earth), CSV, GeoJSON
 
 ## Install
 
@@ -116,6 +116,11 @@ conn.close()
 ```
 
 ## Changelog
+
+### v1.8.0 (2026-09-12)
+- **GeoJSON export**: `Mission.to_geojson()` emits a FeatureCollection (waypoint Points + LineString path) for QGIS / web map overlays
+- New CLI: `mavplan export geojson -o mission.geojson`
+- Releases the v1.6–v1.7.2 work that had been on `main` without a GitHub Release (i18n, scenarios, batch grading, teaching preview, UTF-8 BOM fixes)
 
 ### v1.7.2 (2026-09-11)
 - Fixed: `sniff_format` / `load_mission_file` rejected UTF-8 BOM on QGC WPL and `.plan` files (PowerShell `Set-Content -Encoding utf8` writes a BOM). `Mission.load` already accepted BOM; WPL/plan loaders now match.

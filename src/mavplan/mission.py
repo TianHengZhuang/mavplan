@@ -293,6 +293,59 @@ class Mission:
 """
 
     # ------------------------------------------------------------------
+    # GeoJSON (GIS / web map overlay)
+    # ------------------------------------------------------------------
+    def to_geojson(self) -> dict:
+        """GeoJSON FeatureCollection: waypoint Points + a LineString path.
+
+        Coordinates are ``[lon, lat, alt_m]`` per RFC 7946. Suitable for
+        QGIS, GeoJSON.io, Mapbox, and Leaflet overlays.
+        """
+        features: list[dict] = []
+        for wp in self._waypoints:
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [round(wp.lon, 7), round(wp.lat, 7), round(wp.alt, 2)],
+                    },
+                    "properties": {
+                        "seq": wp.seq,
+                        "speed": wp.speed,
+                        "delay": wp.delay,
+                        "yaw": wp.yaw,
+                        "command": wp.command,
+                        "frame": wp.frame,
+                        "kind": "waypoint",
+                    },
+                }
+            )
+        if len(self._waypoints) >= 2:
+            features.append(
+                {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [
+                            [round(wp.lon, 7), round(wp.lat, 7), round(wp.alt, 2)]
+                            for wp in self._waypoints
+                        ],
+                    },
+                    "properties": {
+                        "name": self.name,
+                        "kind": "path",
+                        "distance_m": round(self.total_distance(), 1),
+                        "waypoint_count": len(self._waypoints),
+                    },
+                }
+            )
+        return {
+            "type": "FeatureCollection",
+            "features": features,
+        }
+
+    # ------------------------------------------------------------------
     # CSV
     # ------------------------------------------------------------------
     def to_csv(self) -> str:

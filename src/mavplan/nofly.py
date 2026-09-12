@@ -265,6 +265,14 @@ def preflight_check(
                  "message": "任务为空，无法预检"}]
     home = wps[0]
 
+    if len(wps) == 1:
+        items.append({
+            "code": "single_waypoint",
+            "level": "info",
+            "waypoint": wps[0].seq,
+            "message": "仅有 1 个航点，无法评估航段距离、转弯或完整电池余量",
+        })
+
     # ---- max distance / max altitude -----------------------------------
     for wp in wps:
         dist = _local(home.lat, home.lon, wp.lat, wp.lon)

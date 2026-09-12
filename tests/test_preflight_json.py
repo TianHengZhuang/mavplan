@@ -49,6 +49,16 @@ def test_summary_matches_report():
     assert report["summary"] == preflight_summary(report["checks"])
 
 
+def test_single_waypoint_reports_info():
+    m = Mission(name="one")
+    m.add_waypoint(lat=31.23, lon=121.47, alt=50)
+    report = preflight_report(m)
+    assert report["summary"]["errors"] == 0
+    assert report["checks"][0]["code"] == "single_waypoint"
+    assert report["checks"][0]["level"] == "info"
+    assert report["summary"]["info"] == 1
+
+
 def test_cli_check_output_file(tmp_path):
     from click.testing import CliRunner
 

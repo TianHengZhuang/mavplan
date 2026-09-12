@@ -117,6 +117,9 @@ conn.close()
 
 ## Changelog
 
+### v1.10.1 (2026-09-12)
+- Preflight: a mission with only one waypoint now returns an info-level `single_waypoint` finding instead of an empty all-clear (path/turn/battery cannot be assessed)
+
 ### v1.10.0 (2026-09-12)
 - CLI: `mavplan mission check -o preflight.json` writes the `mavplan.preflight/1` report to a file (same exit code 2 on errors)
 

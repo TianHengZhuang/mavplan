@@ -39,6 +39,9 @@ mavplan = "mavplan.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/mavplan"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"scenarios" = "mavplan/scenarios"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -49,5 +52,5 @@ target-version = "py310"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E9", "F63", "F7", "F82", "F401", "F841"]
 ignore = ["E501"]

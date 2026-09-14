@@ -8,7 +8,7 @@ A scenario TOML file has the following shape:
 
     [meta]
     name = "rectangle_patrol"
-    title_zh = "矩形巡检"
+    title_zh = "鐭╁舰宸℃"
     title_en = "Rectangle patrol"
     difficulty = "easy"
     description = "..."
@@ -117,8 +117,22 @@ class ScenarioSpec:
 # ----------------------------------------------------------------------
 
 def default_scenarios_dir() -> Path:
-    """Return the bundled ``scenarios/`` directory next to the package."""
-    return Path(__file__).resolve().parent.parent.parent / "scenarios"
+    """Return the bundled ``scenarios/`` directory.
+
+    Checks several layouts so the CLI works for a repo checkout, an editable
+    install, and a wheel that ships scenarios next to the package.
+    """
+    here = Path(__file__).resolve()
+    candidates = [
+        here.parent / "scenarios",  # package data (installed wheel)
+        here.parent.parent.parent / "scenarios",  # src layout: <root>/src/mavplan
+        here.parent.parent / "scenarios",  # flat layout: <root>/mavplan
+        Path.cwd() / "scenarios",
+    ]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return candidates[0]
 
 
 def list_scenarios(scenarios_dir: Optional[Path] = None) -> list[str]:

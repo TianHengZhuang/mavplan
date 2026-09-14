@@ -102,6 +102,19 @@ def _save_mission(mission: Mission) -> None:
 # ------------------------------------------------------------------
 # waypoint group
 # ------------------------------------------------------------------
+def _ensure_utf8_stdio() -> None:
+    """Force UTF-8 stdio so Chinese CLI output works on Windows GBK consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            reconfigure = getattr(stream, "reconfigure", None)
+            if reconfigure is not None:
+                enc = (stream.encoding or "").lower().replace("_", "-")
+                if enc not in ("utf-8", "utf8"):
+                    reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+
 @click.group()
 def waypoint() -> None:
     """Manage waypoints in the current mission."""
@@ -1814,6 +1827,7 @@ def main(lang: str | None) -> None:
       mavplan scenario run rectangle_patrol --task-out task.json --mission-out mission.json
       mavplan grade batch roster.csv logs/ task.json --out reports/
     """
+    _ensure_utf8_stdio()
     pass
 
 

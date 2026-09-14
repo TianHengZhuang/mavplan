@@ -56,6 +56,7 @@ tiny (a few KB each) and used at CLI speed.
 """
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -118,14 +119,21 @@ class ScenarioSpec:
 def default_scenarios_dir() -> Path:
     """Return the bundled ``scenarios/`` directory.
 
-    Checks several layouts so the CLI works for a repo checkout, an editable
-    install, and a wheel that ships scenarios next to the package.
+    Resolution order:
+    1. ``MAVPLAN_SCENARIOS`` environment variable
+    2. package data (``mavplan/scenarios`` in an installed wheel)
+    3. repo layouts (src/ or flat) and the current working directory
     """
+    env = os.environ.get("MAVPLAN_SCENARIOS")
+    if env:
+        env_path = Path(env)
+        if env_path.is_dir():
+            return env_path
     here = Path(__file__).resolve()
     candidates = [
-        here.parent / "scenarios",  # package data (installed wheel)
-        here.parent.parent.parent / "scenarios",  # src layout: <root>/src/mavplan
-        here.parent.parent / "scenarios",  # flat layout: <root>/mavplan
+        here.parent / "scenarios",
+        here.parent.parent.parent / "scenarios",
+        here.parent.parent / "scenarios",
         Path.cwd() / "scenarios",
     ]
     for candidate in candidates:

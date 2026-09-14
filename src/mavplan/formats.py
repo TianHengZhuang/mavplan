@@ -17,9 +17,25 @@ from .waypoint import Waypoint
 WPL_HEADERS = ("QGC WPL 110", "QGC WPL 120")
 
 
+def _looks_like_path(source: str | Path) -> bool:
+    """True when *source* is a filesystem path rather than raw file contents.
+
+    On Linux, ``Path(raw_wpl_text).exists()`` can raise ``OSError: File name
+    too long``; Windows typically returns False instead. Treat multi-line or
+    very long strings as content, not paths.
+    """
+    if isinstance(source, Path):
+        return True
+    if not isinstance(source, str):
+        return False
+    if "\n" in source or "\r" in source:
+        return False
+    return len(source) < 4096
+
+
 def _read_text(source: str | Path) -> str:
     """Read a mission file, tolerating a UTF-8 BOM (PowerShell ``utf8`` default)."""
-    if isinstance(source, (str, Path)) and Path(source).exists():
+    if _looks_like_path(source) and Path(source).exists():
         return Path(source).read_text(encoding="utf-8-sig", errors="replace")
     return str(source).lstrip("﻿")
 

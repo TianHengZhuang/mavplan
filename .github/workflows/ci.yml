@@ -37,20 +37,7 @@ jobs:
         env:
           PYTHONPATH: src
           MAVPLAN_SCENARIOS: ${{ github.workspace }}/scenarios
-        run: |
-          set +e
-          pytest -q --tb=short > /tmp/pytest-out.txt 2>&1
-          status=$?
-          tail -80 /tmp/pytest-out.txt
-          if [ "$status" -ne 0 ]; then
-            echo "## pytest failed (exit $status)" >> "$GITHUB_STEP_SUMMARY"
-            tail -80 /tmp/pytest-out.txt >> "$GITHUB_STEP_SUMMARY"
-            # surface last lines as annotations
-            tail -30 /tmp/pytest-out.txt | while IFS= read -r line; do
-              echo "::error::${line}"
-            done
-          fi
-          exit $status
+        run: pytest -q --tb=short
 
   lint:
     runs-on: ubuntu-latest

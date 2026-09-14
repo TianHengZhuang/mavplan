@@ -33,20 +33,24 @@ jobs:
           pip install pytest click
           pip install "tomli>=2.0; python_version < '3.11'"
 
-      - name: Show environment
-        env:
-          PYTHONPATH: src
-          MAVPLAN_SCENARIOS: ${{ github.workspace }}/scenarios
-        run: |
-          python -V
-          ls scenarios | head
-          python -c "import sys; sys.path.insert(0,'src'); from mavplan.scenario import default_scenarios_dir, list_scenarios; print(default_scenarios_dir()); print(list_scenarios())"
-
       - name: Run tests
         env:
           PYTHONPATH: src
           MAVPLAN_SCENARIOS: ${{ github.workspace }}/scenarios
-        run: pytest -q --tb=short
+        run: |
+          set +e
+          pytest -q --tb=short > /tmp/pytest-out.txt 2>&1
+          status=$?
+          tail -80 /tmp/pytest-out.txt
+          if [ "$status" -ne 0 ]; then
+            echo "## pytest failed (exit $status)" >> "$GITHUB_STEP_SUMMARY"
+            tail -80 /tmp/pytest-out.txt >> "$GITHUB_STEP_SUMMARY"
+            # surface last lines as annotations
+            tail -30 /tmp/pytest-out.txt | while IFS= read -r line; do
+              echo "::error::${line}"
+            done
+          fi
+          exit $status
 
   lint:
     runs-on: ubuntu-latest

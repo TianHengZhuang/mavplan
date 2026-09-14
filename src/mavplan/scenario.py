@@ -57,7 +57,6 @@ tiny (a few KB each) and used at CLI speed.
 from __future__ import annotations
 
 import sys
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional

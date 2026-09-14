@@ -17,26 +17,20 @@ from .waypoint import Waypoint
 WPL_HEADERS = ("QGC WPL 110", "QGC WPL 120")
 
 
-def _looks_like_path(source: str | Path) -> bool:
-    """True when *source* is a filesystem path rather than raw file contents.
-
-    On Linux, ``Path(raw_wpl_text).exists()`` can raise ``OSError: File name
-    too long``; Windows typically returns False instead. Treat multi-line or
-    very long strings as content, not paths.
-    """
-    if isinstance(source, Path):
-        return True
-    if not isinstance(source, str):
-        return False
-    if "\n" in source or "\r" in source:
-        return False
-    return len(source) < 4096
-
-
 def _read_text(source: str | Path) -> str:
-    """Read a mission file, tolerating a UTF-8 BOM (PowerShell ``utf8`` default)."""
-    if _looks_like_path(source) and Path(source).exists():
-        return Path(source).read_text(encoding="utf-8-sig", errors="replace")
+    """Read a mission file, tolerating a UTF-8 BOM (PowerShell ``utf8`` default).
+
+    ``source`` may be a filesystem path or raw file contents. Probing with
+    ``Path(source).exists()`` can raise ``OSError`` on Linux when *source* is
+    long raw text (ENAMETOOLONG), so treat that as "not a path".
+    """
+    if isinstance(source, (str, Path)):
+        try:
+            path = Path(source)
+            if path.exists():
+                return path.read_text(encoding="utf-8-sig", errors="replace")
+        except OSError:
+            pass
     return str(source).lstrip("﻿")
 
 

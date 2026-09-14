@@ -1,0 +1,44 @@
+{
+  "cityCode": "320300",
+  "cityName": "徐州市",
+  "provinceCode": "320000",
+  "provinceName": "江苏省",
+  "updatedAt": "2026-09-14",
+  "source": "curated-teaching",
+  "disclaimer": "教学演示数据，非法定航行资料；放飞前须以民航局 UOM / 空管公布为准。",
+  "zones": [
+    {
+      "id": "xz-airport-01",
+      "name": "徐州观音国际机场净空保护区",
+      "kind": "circle",
+      "lat": 34.059,
+      "lon": 117.555,
+      "radius_m": 10000,
+      "ceiling_m": 600,
+      "category": "airport",
+      "district": null
+    },
+    {
+      "id": "xz-yunlong-demo",
+      "name": "云龙湖景区教学演示禁飞圈",
+      "kind": "circle",
+      "lat": 34.2472,
+      "lon": 117.1856,
+      "radius_m": 300,
+      "ceiling_m": 120,
+      "category": "scenic",
+      "district": "云龙区"
+    },
+    {
+      "id": "xz-quanshan-demo",
+      "name": "泉山教学缓冲区示例",
+      "kind": "circle",
+      "lat": 34.241,
+      "lon": 117.178,
+      "radius_m": 180,
+      "ceiling_m": 100,
+      "category": "training",
+      "district": "泉山区"
+    }
+  ]
+}

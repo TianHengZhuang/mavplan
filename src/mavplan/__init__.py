@@ -234,3 +234,9 @@ __all__ = [
     "render_mission_preview",
 ]
 __version__ = "1.7.2"
+
+# v1.15+ fleet / regional NFZ / one-click review
+from .fleet import Drone, Fleet, assign_formation_offsets
+from .admin_div import AdminIndex, builtin_admin_index, load_admin_index
+from .nfz_pack import NfzPack, NfzRecord, load_nfz_pack, resolve_region_zones
+from .mission_review import ReviewContext, build_mission_review, render_review_markdown

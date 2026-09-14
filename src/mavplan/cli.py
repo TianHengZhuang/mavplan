@@ -1831,6 +1831,9 @@ main.add_command(grade)
 main.add_command(scenario)
 main.add_command(cls_cmd, name="class")
 
+from . import cli_ext as _cli_ext  # noqa: E402
+_cli_ext.register(main)
+
 
 if __name__ == "__main__":
     main()

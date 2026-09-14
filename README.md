@@ -122,6 +122,12 @@ conn.close()
 
 ## Changelog
 
+### v1.11.0 (2026-09-14)
+- **Fleet model** (`mavplan.fleet`): multi-drone teaching fleets (name, callsign, airframe, battery, role/status)
+- **Regional NFZ catalogue** (`admin_div` + `nfz_pack`): province/city/district listing; builtin Xuzhou teaching pack
+- **One-click mission review** (`mission_review`): pre / in-flight / post sections + Markdown export
+- CLI: `mavplan fleet …`, `mavplan nfz …`, `mavplan review …`
+
 ### v1.10.1 (2026-09-12)
 - Preflight: a mission with only one waypoint now returns an info-level `single_waypoint` finding instead of an empty all-clear (path/turn/battery cannot be assessed)
 

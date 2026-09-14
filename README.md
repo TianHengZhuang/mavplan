@@ -1,5 +1,10 @@
 # mavplan
 
+[![CI](https://github.com/TianHengZhuang/mavplan/actions/workflows/ci.yml/badge.svg)](https://github.com/TianHengZhuang/mavplan/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/mavplan.svg)](https://pypi.org/project/mavplan/)
+[![Python](https://img.shields.io/pypi/pyversions/mavplan.svg)](https://pypi.org/project/mavplan/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 MAVLink mission planner — define drone waypoints, generate patterns, analyze flight logs, and connect to real autopilots.
 
 Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
@@ -240,6 +245,11 @@ conn.close()
 - [mavplan-web](https://github.com/TianHengZhuang/mavplan-web) — offline browser console (Vue 3); [live demo](https://tianhengzhuang.github.io/mavplan-web/)
 - [Chinese-WebNovel-Master](https://github.com/TianHengZhuang/Chinese-WebNovel-Master) — Chinese web-fiction agent workflow
 - [One-click-AI-PPT-creation](https://github.com/TianHengZhuang/One-click-AI-PPT-creation) — topic → presentation deck skill
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md)
+for development setup, tests, and PR guidelines.
 
 ## License
 

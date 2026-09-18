@@ -173,6 +173,52 @@ def nfz_pack_show(pack_json: Path) -> None:
     click.echo(pack.disclaimer)
 
 
+@nfz.command("check")
+@click.argument("mission", type=click.Path(exists=True, path_type=Path))
+@click.option("--zones", "zones_json", type=click.Path(exists=True, path_type=Path), default=None)
+@click.option("--nfz-region", nargs=2, type=str, default=None, help="PROVINCE CITY for builtin pack")
+@click.option("--district", default=None)
+@click.option("--json", "as_json", is_flag=True)
+def nfz_check(
+    mission: Path,
+    zones_json: Path | None,
+    nfz_region: tuple[str, str] | None,
+    district: str | None,
+    as_json: bool,
+) -> None:
+    """Check a mission against NFZ zones (exit 1 if any error-level hit)."""
+    from .mission_review import ReviewContext, build_mission_review
+
+    m = Mission.load(mission)
+    zones: list = []
+    if zones_json:
+        zones = load_zones_json(zones_json)
+    elif nfz_region:
+        _pack, records, _w = resolve_region_zones(nfz_region[0], nfz_region[1], district)
+        zones = records_to_zones(records)
+    review = build_mission_review(ReviewContext(mission=m, zones=zones))
+    checks = review.get("checks") or []
+    errors = [c for c in checks if c.get("level") == "error"]
+    warnings = [c for c in checks if c.get("level") == "warning"]
+    payload = {
+        "schema": "mavplan.nfzcheck/1",
+        "mission": review.get("mission_name"),
+        "verdict": review.get("verdict"),
+        "errors": len(errors),
+        "warnings": len(warnings),
+        "checks": checks,
+    }
+    if as_json:
+        click.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        click.echo(f"mission: {payload['mission']}")
+        click.echo(f"verdict: {payload['verdict']}  errors={payload['errors']} warnings={payload['warnings']}")
+        for c in checks:
+            click.echo(f"  [{c.get('level')}] {c.get('code')}: {c.get('message')}")
+    if errors:
+        raise SystemExit(1)
+
+
 @click.command("review")
 @click.argument("mission", type=click.Path(exists=True, path_type=Path))
 @click.option("--fleet", "fleet_json", type=click.Path(exists=True, path_type=Path), default=None)

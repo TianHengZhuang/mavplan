@@ -581,6 +581,32 @@ def wpl(output: str) -> None:
         click.echo(f"  Exported WPL to {output}")
 
 
+@export.command("check")
+@click.argument("exported", type=click.Path(exists=True))
+@click.option("--tol-m", default=1.0, help="Allowed lat/lon drift in meters")
+@click.option("--json", "as_json", is_flag=True)
+def export_check_cmd(exported: str, tol_m: float, as_json: bool) -> None:
+    """Reload an exported file and verify it matches the current mission."""
+    from .export_check import export_check as _export_check
+
+    m = _load_mission()
+    result = _export_check(m, exported, tol_m=tol_m)
+    if as_json:
+        click.echo(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        click.echo(f"format: {result.get('export_format')}")
+        click.echo(
+            f"waypoints: {result['waypoints_original']} -> {result['waypoints_exported']}"
+        )
+        for issue in result["issues"]:
+            click.echo(f"  [{issue['level']}] {issue['code']}: {issue['message']}")
+        click.echo("OK" if result["ok"] else "FAIL")
+    if not result["ok"]:
+        sys.exit(1)
+    if output != "-":
+        click.echo(f"  Exported WPL to {output}")
+
+
 def _write_output(path: str, content: str) -> None:
     if path == "-" or path == "stdout":
         click.echo(content)
@@ -1660,6 +1686,38 @@ def scenario_run(
 def grade() -> None:
     """Grade flight logs — single or batch class grading."""
     pass
+
+
+@grade.command("plan")
+@click.option("--zones-json", "zones_json", type=click.Path(exists=True), default=None)
+@click.option("--student", default="", help="Student name")
+@click.option("--json", "as_json", is_flag=True)
+@click.option("-o", "--out", "out_path", type=click.Path(), default=None)
+def grade_plan_cmd(zones_json: str | None, student: str, as_json: bool, out_path: str | None) -> None:
+    """Grade the current mission as a plan (no flight log)."""
+    from .export_check import grade_plan_quality
+    from pathlib import Path as _P
+
+    m = _load_mission()
+    zones = load_zones_json(zones_json) if zones_json else []
+    result = grade_plan_quality(m, zones, student=student)
+    if as_json:
+        text = json.dumps(result, ensure_ascii=False, indent=2)
+    else:
+        lines = [
+            f"mission: {result['mission_name']}",
+            f"student: {result['student'] or '-'}",
+            f"score: {result['score']}  band={result['band']}  verdict={result['verdict']}",
+            f"waypoints: {result['waypoint_count']}",
+        ]
+        for d in result["deductions"]:
+            lines.append(f"  -{d['points']:.0f}  {d['category']}: {d['message']}")
+        text = "\n".join(lines)
+    if out_path:
+        _P(out_path).write_text(text + "\n", encoding="utf-8")
+        click.echo(f"Wrote {out_path}")
+    else:
+        click.echo(text)
 
 
 @grade.command("run")

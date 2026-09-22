@@ -23,6 +23,7 @@ Works with PX4, ArduPilot, and any MAVLink-compatible autopilot.
 - **Survey & photogrammetry** (v1.5): Camera model (FOV/GSD/footprint), overlap-based lane & shutter spacing (`lawnmower --camera`), theoretical coverage validation, survey grading with GSD + side-overlap
 - **Training operations** (v1.6): CLI zh-CN i18n, scenario preset library (8 templates), `grade batch` for CAAC class workflows
 - **Teaching preview** (v1.7): offline HTML mission preview (`mission preview`), printable class overview (`class_summary.html`)
+- **Flight replay** (v1.13): offline single-file replay page (`analyze replay`) — planned route vs actual track, timeline scrubber, play/pause with adjustable frame rate, live altitude / speed / heading gauges
 - **Export**: MAVLink waypoint file, QGC `.plan`, WPL, KML (Google Earth), CSV, GeoJSON
 
 ## Install
@@ -50,6 +51,7 @@ mavplan generate orbit --center 31.235,121.475 --radius 50 --alt 50 --points 12
 mavplan analyze log flight_log.csv
 mavplan analyze kml flight_log.csv -o flight.kml
 mavplan analyze compare flight_log.csv mission.json -o comparison.kml
+mavplan analyze replay flight_log.csv --plan mission.json -o replay.html   # v1.13 offline replay
 
 # --- MAVLink connection (v0.4) ---
 mavplan link status udp:127.0.0.1:14550
@@ -87,7 +89,7 @@ from mavplan import (
     Mission, Waypoint,
     LawnMowerParams, PolygonScanParams, OrbitParams,
     generate_lawnmower, generate_polygon_scan, generate_orbit,
-    FlightLog, parse_csv, compare_to_plan,
+    FlightLog, parse_csv, compare_to_plan, render_replay_html,
     KmlDocument, parse_kml, get_templates,
     MAVLinkConnection,
 )
@@ -106,6 +108,9 @@ log = parse_csv("flight.csv")
 stats = log.stats()
 result = compare_to_plan(log, mission)
 
+# Flight replay (v1.13): single-file offline HTML page
+render_replay_html(log, mission, output_path="replay.html", fps=10)
+
 # KML import
 doc = parse_kml("site.kml")
 mission2 = doc.to_mission(default_alt=60)
@@ -121,6 +126,14 @@ conn.close()
 ```
 
 ## Changelog
+
+### v1.13.0 (2026-09-22)
+- **Flight replay** (`mavplan.replay_html`): single-file offline replay page — planned route vs actual track, timeline scrubber, play/pause with 1x/2x/4x, live altitude / speed / heading gauges, altitude-vs-distance profile
+- CLI: `mavplan analyze replay flight.csv [--plan plan.json] [-o replay.html] [--fps 10]`; large logs are down-sampled (default 1200 frames) and the page stays well under 2 MB
+- Fix: stray `output` reference in `mavplan export check` that broke `ruff` lint
+
+### v1.12.0 (2026-09-18)
+- CLI: `mavplan export check <file>` (reload exported mission, fail on waypoint drift); `mavplan grade plan`; module `mavplan.export_check`
 
 ### v1.11.0 (2026-09-14)
 - **Fleet model** (`mavplan.fleet`): multi-drone teaching fleets (name, callsign, airframe, battery, role/status)
@@ -189,7 +202,7 @@ conn.close()
 - Test suite: 138 → 165 tests (100% passing), zero new runtime dependencies
 
 ### v1.2 — 部分并入 v1.7
-- HTML mission preview shipped as **v1.7.0** (`mission preview`); flight replay (`analyze replay`) remains pending
+- HTML mission preview shipped as **v1.7.0** (`mission preview`); flight replay (`analyze replay`) shipped as **v1.13.0**
 - Original v1.2 slot is no longer a separate release line
 
 ### v1.1.0 (2026-09-08)

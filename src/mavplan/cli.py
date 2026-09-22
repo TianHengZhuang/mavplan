@@ -603,8 +603,6 @@ def export_check_cmd(exported: str, tol_m: float, as_json: bool) -> None:
         click.echo("OK" if result["ok"] else "FAIL")
     if not result["ok"]:
         sys.exit(1)
-    if output != "-":
-        click.echo(f"  Exported WPL to {output}")
 
 
 def _write_output(path: str, content: str) -> None:
@@ -935,6 +933,63 @@ def kml(csv_path: str, output: str) -> None:
         Path(output).parent.mkdir(parents=True, exist_ok=True)
         Path(output).write_text(kml_content, encoding="utf-8")
         click.echo(f"  KML saved to {output} ({len(fl)} points)")
+
+
+@analyze.command()
+@click.argument("csv_path", type=click.Path(exists=True))
+@click.option("--plan", "plan_path", type=click.Path(exists=True), default=None,
+              help="Planned mission JSON to overlay as a reference route")
+@click.option("--output", "-o", "output", type=click.Path(), default="replay.html",
+              help="Output HTML path (default: replay.html)")
+@click.option("--fps", type=int, default=10, help="Replay frame rate, 1-60 (default: 10)")
+def replay(csv_path: str, plan_path: Optional[str], output: str, fps: int) -> None:
+    """Render an offline flight replay page (map + gauges + timeline).
+
+    Produces a single self-contained HTML file: planned route vs actual
+    flight track, a timeline scrubber, play / pause with an adjustable
+    frame rate, and live altitude / speed / heading gauges.  Fully
+    offline — no map tiles, no JS libraries, works as an archive copy.
+
+    Example:
+      mavplan analyze replay flight.csv --plan plan.json -o replay.html
+      mavplan analyze replay flight.csv --fps 20
+    """
+    if fps < 1 or fps > 60:
+        click.echo("  Error: --fps must be between 1 and 60", err=True)
+        sys.exit(1)
+
+    try:
+        fl = parse_csv(csv_path)
+    except Exception as e:
+        click.echo(f"  Error parsing {csv_path}: {e}", err=True)
+        sys.exit(1)
+
+    plan = None
+    if plan_path:
+        try:
+            plan = Mission.load(plan_path)
+        except Exception as e:
+            click.echo(f"  Error loading plan {plan_path}: {e}", err=True)
+            sys.exit(1)
+
+    from .replay_html import render_replay_html
+
+    try:
+        doc = render_replay_html(fl, plan, output_path=output, fps=fps)
+    except ValueError as e:
+        click.echo(f"  Error: {e}", err=True)
+        sys.exit(1)
+
+    size_kb = len(doc.encode("utf-8")) / 1024
+    stats = fl.stats()
+    click.echo(f"  Flight log: {fl.source_file}")
+    click.echo(f"  Points: {stats.num_points}")
+    click.echo(f"  Duration: {stats.flight_duration_s:.1f} s")
+    click.echo(f"  Distance: {stats.total_distance_m / 1000:.2f} km")
+    if plan is not None:
+        click.echo(f"  Plan: {plan.name} ({len(plan)} waypoints)")
+    click.echo(f"  Replay rate: {fps} fps (page offers 1x / 2x / 4x)")
+    click.echo(f"  Replay written: {output} ({size_kb:.1f} KB)")
 
 
 def _merge_kml(plan_kml: str, flight_kml: str, mission_name: str) -> str:

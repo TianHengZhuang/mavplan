@@ -1,0 +1,25 @@
+=== mavplan v1.13 flight replay CLI smoke ===
+
+--- 1) analyze replay with plan overlay ---
+  Flight log: examples\v13_flight_li_ming.csv
+  Points: 1399
+  Duration: 700.7 s
+  Distance: 6.71 km
+  Plan: v1.4 预检演示-常规航线 (5 waypoints)
+  Replay rate: 10 fps (page offers 1x / 2x / 4x)
+  Replay written: examples/v18_replay_demo.html (83.6 KB)
+exit code: 0
+
+--- 2) analyze replay --fps 20 (no plan) ---
+  Flight log: examples\v13_flight_zhang_fang.csv
+  Points: 999
+  Duration: 500.2 s
+  Distance: 7.80 km
+  Replay rate: 20 fps (page offers 1x / 2x / 4x)
+  Replay written: C:\Users\HUAWEI\AppData\Local\Temp\v18_smoke_noplan.html (71.0 KB)
+exit code: 0
+
+--- 3) analyze replay --fps 61 (invalid, expected exit 1) ---
+  Error: --fps must be between 1 and 60
+exit code: 1
+

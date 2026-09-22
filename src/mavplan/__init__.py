@@ -129,6 +129,9 @@ from .report_html import (
 from .preview_html import (
     render_mission_preview,
 )
+from .replay_html import (
+    render_replay_html,
+)
 
 __all__ = [
     "Mission",
@@ -232,8 +235,10 @@ __all__ = [
     "write_class_summary_html",
     "render_class_summary_html",
     "render_mission_preview",
+    # v1.13 -- flight replay
+    "render_replay_html",
 ]
-__version__ = "1.7.2"
+__version__ = "1.13.0"
 
 # v1.15+ fleet / regional NFZ / one-click review
 from .fleet import Drone, Fleet, assign_formation_offsets
